@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PrimeStake Ghana | Sports Betting, Live Odds & Aviator</title>
+<meta name="description" content="PrimeStake — sports betting in Ghana: live odds, betslip, booking codes and mobile money wallet. 18+, bet responsibly.">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-in">
+    <a class="logo" href="#" data-nav="home">PRIME <span>STAKE</span></a>
+    <nav class="mainnav" id="mainNav">
+      <button data-nav="home" class="navlink active">Home</button>
+      <button data-nav="live" class="navlink">Live</button>
+      <button data-nav="sports" class="navlink">Sports</button>
+      <button data-nav="games" class="navlink">Games</button>
+      <button data-nav="virtual" class="navlink">Virtual</button>
+      <button data-nav="bets" class="navlink">My Bets</button>
+      <button data-nav="wallet" class="navlink">Wallet</button>
+      <button data-nav="promos" class="navlink">Promotions</button>
+      <button data-nav="support" class="navlink">Support</button>
+      <button data-nav="profile" class="navlink">ME Profile</button>
+    </nav>
+    <div class="headactions" id="headActions">
+      <button class="btn ghost" id="loginBtn">Login</button>
+      <button class="btn gold" id="registerBtn">Register</button>
+    </div>
+    <button class="burger" id="burgerBtn" aria-label="Open menu">&#9776;</button>
+  </div>
+</header>
+
+<div class="drawerwrap" id="drawerWrap" hidden>
+  <div class="drawershade" id="drawerShade"></div>
+  <aside class="drawer" id="menuDrawer" aria-label="Menu">
+    <div class="drawer-head"><span>Menu</span><button class="drawer-x" id="drawerClose" aria-label="Close menu">&times;</button></div>
+    <button class="dlink" data-nav="wallet">Wallet</button>
+    <button class="dlink" data-nav="promos">Promotions</button>
+    <button class="dlink" data-nav="support">Support</button>
+    <button class="dlink" data-nav="profile">ME Profile</button>
+  </aside>
+</div>
+
+<main id="viewRoot" class="page"></main>
+
+<button class="slipfab" id="slipFab">Open Betslip <span class="badge" id="slipCount">0</span></button>
+
+<aside class="drawer" id="slipDrawer" aria-hidden="true">
+  <div class="drawer-head">
+    <h2>Betslip</h2>
+    <button class="iconbtn" id="slipClose" aria-label="Close betslip">&times;</button>
+  </div>
+  <div class="drawer-body" id="slipBody"></div>
+  <div class="drawer-foot" id="slipFoot"></div>
+</aside>
+<div class="scrim" id="scrim"></div>
+
+<div class="modalwrap" id="authWrap" aria-hidden="true">
+  <div class="modal">
+    <button class="iconbtn modal-x" id="authClose" aria-label="Close">&times;</button>
+    <h2 id="authTitle">Welcome Back</h2>
+    <p class="modal-sub" id="authSub">Log in to your PrimeStake account</p>
+    <div class="authtabs">
+      <button id="tabLogin" class="authtab active">Login</button>
+      <button id="tabRegister" class="authtab">Register</button>
+    </div>
+    <form id="authForm">
+      <label id="authNameRow" style="display:none">Display name (optional)
+        <input type="text" id="authName" placeholder="Your name" autocomplete="name">
+      </label>
+      <label>Phone number
+        <input type="tel" id="authPhone" placeholder="05X XXX XXXX" autocomplete="tel" required>
+      </label>
+      <label>Password
+        <input type="password" id="authPass" placeholder="Your password" autocomplete="current-password" required>
+      </label>
+      <a class="forgot" href="#" id="forgotLink">Forgot Password?</a>
+      <button type="submit" class="btn gold big" id="authSubmit">Login</button>
+    </form>
+    <p class="modal-alt" id="authAlt">Don't have an account? <a href="#" id="authAltLink">Register</a></p>
+  </div>
+</div>
+
+<footer class="sitefoot">
+  <div class="foot-in">
+    <div class="foot-brand">
+      <span class="logo">PRIME <span>STAKE</span></span>
+      <p>Bet smart. Play live. Cash out on your terms.</p>
+      <span class="age-badge">18+</span>
+    </div>
+    <div class="foot-col">
+      <h4>Betting</h4>
+      <button data-nav="home">Home</button>
+      <button data-nav="live">Live</button>
+      <button data-nav="sports">Sports</button>
+      <button data-nav="virtual">Virtual</button>
+    </div>
+    <div class="foot-col">
+      <h4>Account</h4>
+      <button data-nav="bets">My Bets</button>
+      <button data-nav="wallet">Wallet</button>
+      <button data-nav="verify">Verify Bet</button>
+      <button data-nav="booking">Booking Codes</button>
+    </div>
+    <div class="foot-col">
+      <h4>More</h4>
+      <button data-nav="games">Games</button>
+      <button data-nav="promos">Promotions</button>
+      <button data-nav="support">Support</button>
+      <button data-nav="profile">ME Profile</button>
+    </div>
+  </div>
+  <div class="foot-pay">MTN MoMo · Telecel Cash · AT Money</div>
+  <p class="foot-legal">Bet responsibly. Betting is for persons 18 years and above. If betting stops being fun, take a break and seek support.
+  <br>© 2026 PrimeStake. All rights reserved.</p>
+</footer>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
