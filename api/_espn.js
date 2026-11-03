@@ -80,13 +80,31 @@ function oddsFromEspn(comp) {
   if (home) odds.o1 = home;
   if (draw) odds.ox = draw;
   if (away) odds.o2 = away;
+  // ESPN's totals line is not always 2.5 (Champions League games
+  // often carry 3.5): take whatever half-goal line it publishes into
+  // that line's keys; the ladder and the read-time fill price the
+  // remaining lines from there.
   const tot = o.total || {};
-  const overLine = tot.over && tot.over.close && tot.over.close.line;
-  if (overLine === 'o2.5') {
+  const totLine = /^o(\d+\.\d)$/.exec((tot.over && tot.over.close && tot.over.close.line) || '');
+  if (totLine) {
+    const suffix = totLine[1].replace('.', '');
     const over = americanToDecimal(tot.over.close.odds);
     const under = americanToDecimal(tot.under && tot.under.close && tot.under.close.odds);
-    if (over) odds.over25 = over;
-    if (under) odds.under25 = under;
+    if (over) odds['over' + suffix] = over;
+    if (under) odds['under' + suffix] = under;
+  }
+  // Spread (handicap): ESPN publishes one line per game — the home
+  // team's line plus both prices. Stored as sph/spa with the home
+  // line in sp_line; the details page renders it as its own market
+  // and settlement reads the line back out of the market name.
+  const ps = o.pointSpread || {};
+  const spHome = ps.home && ps.home.close;
+  const spAway = ps.away && ps.away.close;
+  if (spHome && spAway) {
+    const line = parseFloat(spHome.line);
+    const sph = americanToDecimal(spHome.odds);
+    const spa = americanToDecimal(spAway.odds);
+    if (Number.isFinite(line) && sph && spa) { odds.sph = sph; odds.spa = spa; odds.sp_line = line; }
   }
   addTotalLadder(odds);
   // Double Chance priced from the 1X2 book: combined fair price of the
@@ -103,7 +121,9 @@ function oddsFromEspn(comp) {
     const full = expandOdds(odds.o1, odds.ox, odds.o2);
     for (const k of Object.keys(full)) if (odds[k] === undefined) odds[k] = full[k];
   }
-  Object.keys(odds).forEach(k => { if (!(odds[k] > 1)) delete odds[k]; });
+  // sp_line is the spread line, not a price — it is exempt from the
+  // price cleanup below (a line of +0.5 or -1.5 is never > 1).
+  Object.keys(odds).forEach(k => { if (k !== 'sp_line' && !(odds[k] > 1)) delete odds[k]; });
   return odds;
 }
 function mapEvent(ev, leagueName) {

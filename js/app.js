@@ -221,6 +221,22 @@ function matchDetailsHTML() {
       return '<button class="odd' + sel + '" data-odd="' + m.id + '" data-market="' + esc(market) + '" data-pick="' + esc(o.label) + '"><small>' + esc(o.label) + '</small>' + o.odd.toFixed(2) + '</button>';
     }).join('') + '</div></div>';
   }
+  // Handicap (spread): ESPN publishes one line per game, so it is
+  // not in MARKET_LIST (the line differs by match). The line in the
+  // market name is the home team's; picks mirror it.
+  if (m.odds && Number(m.odds.sph) > 1 && Number(m.odds.spa) > 1 && m.odds.sp_line != null) {
+    const L = Number(m.odds.sp_line);
+    const fmt = (x) => (x > 0 ? '+' : '') + x.toFixed(1);
+    const market = 'Handicap ' + fmt(L);
+    const opts = [
+      { label: 'Home ' + fmt(L), odd: Number(m.odds.sph) },
+      { label: 'Away ' + fmt(-L), odd: Number(m.odds.spa) },
+    ];
+    html += '<div class="card md-sec"><h3>' + esc(market) + '</h3><div class="md-odds">' + opts.map(o => {
+      const sel = state.slip.has(slipKey(m.id, market, o.label)) ? ' sel' : '';
+      return '<button class="odd' + sel + '" data-odd="' + m.id + '" data-market="' + esc(market) + '" data-pick="' + esc(o.label) + '"><small>' + esc(o.label) + '</small>' + o.odd.toFixed(2) + '</button>';
+    }).join('') + '</div></div>';
+  }
   return html;
 }
 function matchListHTML() {

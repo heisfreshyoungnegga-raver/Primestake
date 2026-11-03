@@ -138,6 +138,7 @@ const MARKETS = {
 // Map a (market, pick) pair to its key inside the match odds jsonb.
 // Over/Under works for any half-goal line: 'Over/Under 1.5' + 'Over 1.5'
 // resolves to 'over15'.
+function fmtLine(x) { return (x > 0 ? '+' : '') + Number(x).toFixed(1); }
 function keyFor(market, pick) {
   if (MARKETS[market]) return MARKETS[market][pick] || null;
   const ou = /^Over\/Under (\d+\.\d)$/.exec(market);
@@ -145,6 +146,14 @@ function keyFor(market, pick) {
     const suffix = ou[1].replace('.', '');
     if (pick === 'Over ' + ou[1]) return 'over' + suffix;
     if (pick === 'Under ' + ou[1]) return 'under' + suffix;
+  }
+  // Handicap markets carry the home team's spread line in the name
+  // ('Handicap +0.5'); picks are 'Home +0.5' / 'Away -0.5'.
+  const hc = /^Handicap ([+-]?\d+\.\d)$/.exec(market);
+  if (hc) {
+    const line = parseFloat(hc[1]);
+    if (pick === 'Home ' + fmtLine(line)) return 'sph';
+    if (pick === 'Away ' + fmtLine(-line)) return 'spa';
   }
   return null;
 }
@@ -154,6 +163,15 @@ function pickWon(market, pick, home, away) {
   if (ou) {
     const line = parseFloat(ou[1]);
     return pick === 'Over ' + ou[1] ? total > line : total < line;
+  }
+  const hc = /^Handicap ([+-]?\d+\.\d)$/.exec(market);
+  if (hc) {
+    const line = parseFloat(hc[1]);
+    // The home pick applies the line to the home score; the away
+    // pick carries the mirrored line. A level adjusted score (only
+    // possible on whole lines) loses — ESPN soccer spreads are
+    // half-goal lines, so this does not arise in practice.
+    return pick.indexOf('Home ') === 0 ? (home + line) > away : (away - line) > home;
   }
   switch (market) {
     case '1X2': return pick === '1' ? home > away : pick === 'X' ? home === away : away > home;
