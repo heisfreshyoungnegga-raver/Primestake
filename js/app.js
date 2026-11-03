@@ -1143,6 +1143,18 @@ if (urlParams.get('admin_invite')) localStorage.setItem('ps_admin_invite', urlPa
 loadHeroImages();
 loadTileImages();
 if (urlParams.get('admin_invite')) openAuth('register');
+// A referral link is for a NEW account (Prince hit this himself on
+// 2026-11-03: opening his own link while signed in just showed him
+// his logged-in site and looked broken). So: signed-out visitors go
+// straight to the register form, and signed-in users get told why
+// the link cannot attach to the account they are already in.
+if (urlParams.get('ref')) {
+  if (state.token) {
+    setTimeout(() => toast('You are already signed in — referral links are for new accounts. Share this link with someone new, or log out first to register under it.'), 600);
+  } else {
+    openAuth('register');
+  }
+}
 
 // boot: restore session, then load real matches
 $('#burgerBtn').addEventListener('click', openMenu);
