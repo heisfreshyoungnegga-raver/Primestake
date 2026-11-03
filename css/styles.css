@@ -381,6 +381,39 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 }
 .scrim.on { opacity: 1; pointer-events: auto; }
 
+/* ---------- betslip: bright, high-contrast sheet ----------
+   The slip is the money moment, so it gets its own clean light
+   design: white panel, soft selection cards with a gold edge, and
+   near-black text throughout. It previously inherited the menu
+   drawer's near-black background, which buried the dark text —
+   team names were unreadable. These rules are scoped to
+   #slipDrawer so the dark menu keeps its own look. */
+#slipDrawer { background: #ffffff; color: #14161a; }
+#slipDrawer .drawer-head { border-bottom: 3px solid var(--accent); }
+#slipDrawer .drawer-head h2 { color: #14161a; }
+#slipDrawer .iconbtn { color: #14161a; }
+#slipDrawer .sel {
+  background: #f7f7f2;
+  border: 1px solid #e2e2da;
+  border-left: 4px solid var(--accent);
+  border-radius: 10px;
+  padding: 12px;
+}
+#slipDrawer .sel .s-match { color: #14161a; font-size: 14px; }
+#slipDrawer .sel .s-pick { color: #4c5563; }
+#slipDrawer .sel .s-odd { color: var(--win); font-size: 16px; }
+#slipDrawer .sel .rm { color: var(--live); cursor: pointer; }
+#slipDrawer .empty { color: #4c5563; }
+#slipDrawer .drawer-foot { background: #fbfbf8; border-top: 2px solid #e8e8e0; }
+#slipDrawer .drawer-foot .row { color: #14161a; font-weight: 600; }
+#slipDrawer .drawer-foot input {
+  background: #ffffff;
+  border: 2px solid #14161a;
+  color: #14161a;
+  font-weight: 700;
+  border-radius: 8px;
+}
+
 /* modals */
 .modalwrap {
   position: fixed;
@@ -724,7 +757,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .drawerwrap { position: fixed; inset: 0; z-index: 90; }
 .drawerwrap[hidden] { display: none; }
 .drawershade { position: absolute; inset: 0; background: rgba(0,0,0,.6); }
-.drawer { position: absolute; top: 0; right: 0; height: 100%; width: min(300px, 82vw); background: #0c0c0d; border-left: 1px solid #26262a; padding: 18px; display: flex; flex-direction: column; gap: 8px; }
+#menuDrawer { position: absolute; top: 0; right: 0; height: 100%; width: min(300px, 82vw); background: #0c0c0d; border-left: 1px solid #26262a; padding: 18px; display: flex; flex-direction: column; gap: 8px; }
 /* The base .drawer rule parks panels off-screen with translateX(105%) until
    .open is added (the betslip's mechanism). The menu drawer is shown/hidden
    by its wrap's [hidden] flag instead, so it must not inherit that transform
