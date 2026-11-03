@@ -269,6 +269,32 @@ const QICONS = {
   'Verify Bet': '<svg viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 2.5V11c0 4.6-3 7.7-7 9.5C8 18.7 5 15.6 5 11V5.5L12 3z"/><path d="M9 11.6l2.2 2.2 4.3-4.3"/></svg>',
   'Booking Code': '<svg viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h13A1.5 1.5 0 0 1 20 8.5V10a2.5 2.5 0 0 0 0 5v1.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 16.5V15a2.5 2.5 0 0 0 0-5V8.5z"/><path d="M13.5 8v1.6M13.5 11.2v1.6M13.5 14.4V16"/></svg>',
 };
+// Custom tile artwork (generated for PrimeStake, black-and-gold set).
+// Like the hero photos, the files in assets/ hold base64 text, so they
+// are decoded client-side; until a decode lands, the inline SVG shows.
+const TILE_IMGS = {
+  'Soccer': 'assets/icon-soccer.jpg',
+  'Today': 'assets/icon-today.jpg',
+  'Aviator': 'assets/icon-aviator.jpg',
+  'Basketball': 'assets/icon-basketball.jpg',
+  'Verify Bet': 'assets/icon-verify.jpg',
+  'Booking Code': 'assets/icon-booking.jpg',
+};
+const tileUrls = {};
+function loadTileImages() {
+  Object.keys(TILE_IMGS).forEach(label => {
+    const path = TILE_IMGS[label];
+    if (tileUrls[label]) return;
+    tileUrls[label] = path;
+    fetch(path).then(r => r.arrayBuffer()).then(buf => {
+      const bytes = new Uint8Array(buf);
+      tileUrls[label] = (bytes[0] === 0xFF && bytes[1] === 0xD8)
+        ? URL.createObjectURL(new Blob([buf], { type: 'image/jpeg' }))
+        : 'data:image/jpeg;base64,' + new TextDecoder().decode(buf).replace(/\s+/g, '');
+      if (state.view === 'home') render();
+    }).catch(() => {});
+  });
+}
 function quickHTML() {
   const tiles = [
     ['Soccer', ''],
@@ -278,11 +304,15 @@ function quickHTML() {
     ['Verify Bet', ''],
     ['Booking Code', ''],
   ];
-  return '<div class="quickrow">' + tiles.map(([label, cls]) =>
-    '<button class="qtile' + (cls ? ' ' + cls : '') + '" data-quick="' + label + '">' +
-    (cls === 'hot' ? '<span class="qhot">HOT</span>' : '') +
-    '<span class="qicon">' + QICONS[label] + '</span><span>' + label + '</span></button>'
-  ).join('') + '</div>';
+  return '<div class="quickrow">' + tiles.map(([label, cls]) => {
+    const u = tileUrls[label];
+    const art = (u && (u.startsWith('data:') || u.startsWith('blob:')))
+      ? '<img class="qimg" src="' + u + '" alt="">'
+      : QICONS[label];
+    return '<button class="qtile' + (cls ? ' ' + cls : '') + '" data-quick="' + label + '">' +
+      (cls === 'hot' ? '<span class="qhot">HOT</span>' : '') +
+      '<span class="qicon">' + art + '</span><span>' + label + '</span></button>';
+  }).join('') + '</div>';
 }
 function promoStripHTML() {
   const p = PROMOS[0];
@@ -459,9 +489,14 @@ function momoPanelHTML() {
       '<button class="btn gold" data-momo-reset>Try Again</button></div>';
   }
   const phone = state.user ? state.user.phone : '';
+  // Gateway deposits use Prince's preset amounts (2026-11-03): the chips
+  // fill the amount box; a custom amount can still be typed.
+  const presets = [300, 500, 1000, 1500, 2000];
   return '<div class="card"><h3>Mobile Money</h3>' +
     '<form id="momoForm" class="stack">' +
-    '<label>Amount (GHS) <input type="number" id="mmAmt" min="1" max="5000" step="0.01" value="50" required></label>' +
+    '<div class="amtrow">' + presets.map(a =>
+      '<button type="button" class="amtchip' + (a === 300 ? ' on' : '') + '" data-amt="' + a + '">GHS ' + a.toLocaleString('en-GB') + '</button>').join('') + '</div>' +
+    '<label>Amount (GHS) <input type="number" id="mmAmt" min="1" max="5000" step="0.01" value="300" required></label>' +
     '<label>MoMo number <input type="tel" id="mmPhone" value="' + esc(phone) + '" required></label>' +
     '<label>Network <select id="mmNet"><option value="MTN">MTN Mobile Money</option><option value="TELECEL">Telecel Cash</option><option value="AIRTELTIGO">AT Money</option></select></label>' +
     '<p class="muted" id="mmFeeLine"></p>' +
@@ -693,7 +728,16 @@ function closeMenu() { const w = $('#drawerWrap'); if (w) w.hidden = true; }
 function syncHeader() {
   const ha = $('#headActions');
   if (state.user) {
-    ha.innerHTML = '<span class="userchip">' + esc(state.user.phone) + ' · ' + money(state.user.balance_ghs) + '</span>';
+    // Header shows the account's mobile number plus a Deposit shortcut
+    // (Prince's layout, 2026-11-03): the balance lives in Wallet/Profile.
+    // The button's own listener primes the wallet on the deposit section
+    // before the shared nav handler switches the view.
+    ha.innerHTML = '<span class="userchip">' + esc(state.user.phone) + '</span>' +
+      '<button class="btn gold" id="headDeposit" data-nav="wallet">Deposit</button>';
+    $('#headDeposit').addEventListener('click', () => {
+      state.walletSection = 'deposit';
+      state.walletTab = 'instant';
+    });
   } else {
     ha.innerHTML = '<button class="btn ghost" id="loginBtn">Login</button>' +
       '<button class="btn gold" id="registerBtn">Register</button>';
@@ -762,6 +806,13 @@ document.addEventListener('click', e => {
   }
   const rm = e.target.closest('[data-rm]');
   if (rm) { state.slip.delete(rm.dataset.rm); renderSlip(); render(); return; }
+  const amtChip = e.target.closest('[data-amt]');
+  if (amtChip) {
+    const inp = $('#mmAmt');
+    if (inp) { inp.value = amtChip.dataset.amt; syncMomoFee(); }
+    document.querySelectorAll('.amtchip').forEach(c => c.classList.toggle('on', c === amtChip));
+    return;
+  }
   const quick = e.target.closest('[data-quick]');
   if (quick) {
     const q = quick.dataset.quick;
@@ -816,7 +867,11 @@ document.addEventListener('click', e => {
 });
 
 document.addEventListener('input', e => {
-  if (e.target.id === 'mmAmt') syncMomoFee();
+  if (e.target.id === 'mmAmt') {
+    syncMomoFee();
+    document.querySelectorAll('.amtchip').forEach(c =>
+      c.classList.toggle('on', Number(c.dataset.amt) === Number(e.target.value)));
+  }
   if (e.target.id === 'mmPhone') {
     const n = detectNetworkJS(e.target.value);
     const sel = $('#mmNet');
@@ -1033,6 +1088,7 @@ const urlParams = new URLSearchParams(location.search);
 if (urlParams.get('ref')) localStorage.setItem('ps_ref', urlParams.get('ref'));
 if (urlParams.get('admin_invite')) localStorage.setItem('ps_admin_invite', urlParams.get('admin_invite'));
 loadHeroImages();
+loadTileImages();
 if (urlParams.get('admin_invite')) openAuth('register');
 
 // boot: restore session, then load real matches
