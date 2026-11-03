@@ -1,4 +1,4 @@
-const { sql, readBody, send, guard, requireAuth } = require('../_lib');
+const { sql, readBody, send, guard, requireAuth } = require('./_lib');
 
 module.exports = guard(async (req, res) => {
   const auth = requireAuth(req, res);

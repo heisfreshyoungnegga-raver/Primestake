@@ -1,0 +1,8 @@
+{
+  "name": "primestake",
+  "private": true,
+  "version": "1.0.0",
+  "description": "PrimeStake sportsbook - static site + API in one Node server for Railway; same handlers deploy as Vercel functions.",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" }
+}
