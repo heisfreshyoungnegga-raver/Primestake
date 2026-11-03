@@ -688,9 +688,12 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 .ticker-view { flex: 1; overflow: hidden; }
 .filtercard {
   background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 14px; margin: 12px 0;
-  display: grid; gap: 12px; box-shadow: 0 4px 14px rgba(20,20,20,.05);
+  border-radius: var(--radius); padding: 10px; margin: 12px 0;
+  display: grid; gap: 10px; box-shadow: 0 4px 14px rgba(20,20,20,.05);
 }
+.fbar { display: flex; gap: 8px; align-items: center; }
+.fbar .searchbar { flex: 1 1 auto; }
+.fbar .filterbtn { flex: 0 0 auto; }
 .fcard-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .fcard-head h3 { margin: 0; font-size: 16px; }
 .fcard-hint { color: var(--muted); font-size: 12px; }

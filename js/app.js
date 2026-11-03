@@ -206,7 +206,9 @@ function matchListHTML() {
       '<button class="btn gold" data-quick="Soccer">See soccer matches</button></div>';
   }
   const all = state.matches.filter(matchVisible);
-  let html = '<p class="count">EVENTS &amp; MARKETS — <b>' + all.length + ' Matches Found</b></p>';
+  // No "EVENTS & MARKETS — N Matches Found" header (Prince removed it
+  // 2026-11-03): the groups speak for themselves and the line ate space.
+  let html = '';
   html += groupHTML('LIVE MATCHES', all.filter(m => m.status === 'live'), true);
   const byDay = {};
   all.filter(m => m.status === 'upcoming').forEach(m => {
@@ -256,9 +258,8 @@ function filtersHTML() {
   // far down the page. Search stays visible at all times.
   const sliders = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h9M19 7h1M4 17h3M13 17h7"/><circle cx="16" cy="7" r="2.3"/><circle cx="10" cy="17" r="2.3"/></svg>';
   return '<section class="filtercard">' +
-    '<div class="fcard-head"><h3>Find your match</h3>' +
+    '<div class="fbar"><div class="searchbar"><span class="sicon">⌕</span><input id="searchBox" type="search" placeholder="Search teams or leagues..." value="' + esc(state.query) + '"></div>' +
     '<button class="filterbtn' + (state.filtersOpen ? ' on' : '') + '" id="filterToggle" aria-expanded="' + !!state.filtersOpen + '">' + sliders + 'Filters<span class="fchev">' + (state.filtersOpen ? '▴' : '▾') + '</span></button></div>' +
-    '<div class="searchbar"><span class="sicon">⌕</span><input id="searchBox" type="search" placeholder="Search teams or leagues..." value="' + esc(state.query) + '"></div>' +
     '<div class="frows' + (state.filtersOpen ? '' : ' closed') + '">' +
     row('League', 'league', leagues(), state.league) +
     row('Market', 'market', MARKET_LIST, state.market) +
