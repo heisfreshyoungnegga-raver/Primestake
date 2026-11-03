@@ -3,6 +3,7 @@ const handlers = {
   register: require('../_handlers/auth/register'),
   login: require('../_handlers/auth/login'),
   me: require('../_handlers/auth/me'),
+  referrals: require('../_handlers/auth/referrals'),
   password: require('../_handlers/auth/password'),
 };
 module.exports = (req, res) => {

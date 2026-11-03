@@ -1,9 +1,10 @@
 const { sql, hashPassword, issueToken, readBody, send, guard, publicUser, ensureAdminTables } = require('../../_lib');
 
 // Registration. Two invite paths can ride along:
-//  - ref=<invite code>: the new player is attributed to the admin or
-//    super admin who shared the link, which is what their commission
-//    dashboard counts.
+//  - ref=<invite code>: the new account is attributed to whoever shared
+//    the link — every account (player, admin, super admin) owns a
+//    permanent referral code, and attribution is what the referral
+//    commission ledger pays on.
 //  - admin_invite=<token>: a one-time super-admin invite. The account
 //    is created as an admin in 'pending' status — no session is issued
 //    until the super admin verifies it.
@@ -37,7 +38,7 @@ module.exports = guard(async (req, res) => {
     }
   } else if (ref) {
     const inv = await sql(
-      `select id from users where invite_code = $1 and role in ('admin', 'super_admin') and status = 'active'`,
+      `select id from users where invite_code = $1 and status = 'active'`,
       [String(ref).trim().toUpperCase()]
     );
     if (inv.length) invitedBy = inv[0].id;

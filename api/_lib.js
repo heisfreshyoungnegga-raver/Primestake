@@ -310,9 +310,10 @@ async function getSettings(keys) {
 // Rewards that hang off a completed deposit, run once per deposit txn:
 //  - user cashback: user_cashback_pct of the deposit, credited straight
 //    back to the depositor's balance as an adjustment ledger row.
-//  - admin commission: admin_commission_pct of the deposit, recorded in
-//    the commission ledger for whoever invited the depositor (admins
-//    only), to be paid out later from the super-admin dashboard.
+//  - referral commission: admin_commission_pct of the deposit, recorded
+//    in the commission ledger for whoever invited the depositor — any
+//    account can refer, players included — to be paid out later from
+//    the super-admin dashboard.
 // Idempotent per source txn, so a retried call can never double-pay.
 async function applyDepositRewards(userId, txnId, amountGhs) {
   const amount = Number(amountGhs);
@@ -339,7 +340,7 @@ async function applyDepositRewards(userId, txnId, amountGhs) {
   if (commPct > 0) {
     const inv = await sql(
       `select i.id from users u join users i on i.id = u.invited_by
-       where u.id = $1 and i.role in ('admin', 'super_admin') and i.status = 'active'`,
+       where u.id = $1 and i.status = 'active'`,
       [userId]
     );
     if (inv.length) {
@@ -426,4 +427,19 @@ function inviteCode() {
   return code;
 }
 
-module.exports = { sql, hashPassword, verifyPassword, issueToken, readBody, send, requireAuth, requireAdmin, requireSuperAdmin, guard, publicUser, betCode, MARKETS, keyFor, pickWon, shinobiConfig, shinobiFetch, mapIntentStatus, detectNetwork, ensurePaymentTables, ensureAdminTables, getSettings, applyDepositRewards, isCustomMatch, customMatchState, expandOdds, inviteCode };
+// Every account — player, admin or super admin — owns one permanent
+// referral code. Mint it lazily on first use and return it.
+async function ensureInviteCode(userId) {
+  const rows = await sql('select invite_code from users where id = $1', [userId]);
+  if (!rows.length) return null;
+  if (rows[0].invite_code) return rows[0].invite_code;
+  for (let i = 0; i < 5; i++) {
+    const upd = await sql('update users set invite_code = $2 where id = $1 and invite_code is null returning invite_code', [userId, inviteCode()]);
+    if (upd.length) return upd[0].invite_code;
+    const again = await sql('select invite_code from users where id = $1', [userId]);
+    if (again.length && again[0].invite_code) return again[0].invite_code;
+  }
+  return null;
+}
+
+module.exports = { sql, hashPassword, verifyPassword, issueToken, readBody, send, requireAuth, requireAdmin, requireSuperAdmin, guard, publicUser, betCode, MARKETS, keyFor, pickWon, shinobiConfig, shinobiFetch, mapIntentStatus, detectNetwork, ensurePaymentTables, ensureAdminTables, getSettings, applyDepositRewards, isCustomMatch, customMatchState, expandOdds, inviteCode, ensureInviteCode };

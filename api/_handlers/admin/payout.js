@@ -1,9 +1,10 @@
 const { sql, readBody, send, guard, requireSuperAdmin, ensureAdminTables } = require('../../_lib');
 
-// Super admin only: pay out an admin's pending commissions. The total is
-// credited to that admin's own PrimeStake wallet balance (from where
-// they can withdraw it), the commission rows are stamped paid, and the
-// payout itself lands in their ledger.
+// Super admin only: pay out an earner's pending referral commissions
+// (any account can earn them). The total is credited to that earner's
+// own PrimeStake wallet balance (from where they can withdraw it), the
+// commission rows are stamped paid, and the payout itself lands in
+// their ledger.
 module.exports = guard(async (req, res) => {
   if (req.method !== 'POST') return send(res, 405, { error: 'method_not_allowed' });
   const auth = requireSuperAdmin(req, res);

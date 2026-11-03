@@ -177,7 +177,7 @@ function controlHTML() {
     '<div class="txrow"><div><b>Payouts</b><div class="muted">Frozen = users cannot request withdrawals and the queue cannot confirm them.</div></div>' +
     '<button class="btn ' + (on(s.payouts_frozen) ? 'gold' : 'ghost') + ' sm" data-toggle="freeze">' + (on(s.payouts_frozen) ? 'FROZEN' : 'OPEN') + '</button></div></div>' +
     '<div class="card"><h3>Commission rates</h3><form id="ratesForm" class="stack">' +
-    '<label>Admin commission % (of invited users\' deposits) <input type="number" id="rateAdmin" step="0.1" min="0" max="50" value="' + esc(s.admin_commission_pct || '0') + '"></label>' +
+    '<label>Referral commission % (of a referred user\'s deposits, paid to whoever invited them) <input type="number" id="rateAdmin" step="0.1" min="0" max="50" value="' + esc(s.admin_commission_pct || '0') + '"></label>' +
     '<label>User cashback % (of their own deposit, credited back instantly) <input type="number" id="rateUser" step="0.1" min="0" max="50" value="' + esc(s.user_cashback_pct || '0') + '"></label>' +
     '<button class="btn gold big" type="submit">Save Rates</button></form></div>' +
     '<div class="card"><h3>Give a bonus</h3><form id="bonusForm" class="stack">' +
@@ -195,7 +195,7 @@ function controlHTML() {
     '<button class="btn gold big" type="submit">Generate Invite Link</button></form>' +
     (inviteRows ? '<h4>Outstanding links</h4>' + inviteRows : '') + '</div>' +
     '<div class="card"><h3>Pending admin verifications</h3>' + (pendingRows || '<p class="empty">No admins waiting for verification.</p>') + '</div>' +
-    '<div class="card"><h3>Admin commissions</h3>' + (commRows || '<p class="empty">No admin earnings yet.</p>') + '</div>';
+    '<div class="card"><h3>Referral commissions</h3>' + (commRows || '<p class="empty">No referral earnings yet.</p>') + '</div>';
 }
 function featuredFormHTML() {
   if (!state.user || state.user.role !== 'super_admin') return '';

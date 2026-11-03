@@ -20,6 +20,7 @@ const state = {
   wallet: null,
   walletTab: 'instant',
   walletSection: 'deposit',
+  referrals: null,
   momo: null,
   momoOff: false,
   verifyResult: '',
@@ -296,7 +297,32 @@ function profileHTML() {
     '<button class="prow" data-nav="promos">Promotions <span>›</span></button>' +
     '<button class="prow" data-nav="support">Support <span>›</span></button>' +
     '<button class="prow" data-nav="settings">Settings <span>›</span></button>' +
+    referHTML() +
     '<button class="btn ghost" id="logoutBtn" style="color:var(--live);border-color:var(--live)">Logout</button></div>';
+}
+// Every account can refer: a permanent personal link, who joined
+// through it, and the referral commission earned on their deposits.
+function referHTML() {
+  const d = state.referrals;
+  if (!d) return '<div class="card"><h3>Refer &amp; Earn</h3><p class="muted">Loading your referral link…</p></div>';
+  const link = location.origin + d.invite_path;
+  const c = d.commissions || {};
+  const list = (d.invited_users || []).map(u =>
+    '<div class="card-row"><span>' + esc(u.display_name || u.phone) + '</span><b>' + money(u.deposits_ghs) + ' deposited</b></div>').join('');
+  return '<div class="card"><h3>Refer &amp; Earn</h3>' +
+    '<p class="muted">Share your link — anyone who registers through it is yours, and you earn commission on their deposits.</p>' +
+    '<div class="mannum" style="font-size:13px; letter-spacing:0; word-break:break-all">' + esc(link) + '</div>' +
+    '<button class="btn gold" data-copy="' + esc(link) + '">Copy Link</button>' +
+    '<div class="card-row"><span>People referred</span><b>' + (d.invited_users || []).length + '</b></div>' +
+    '<div class="card-row"><span>Earned so far</span><b>' + money(c.earned_ghs || 0) + '</b></div>' +
+    '<div class="card-row"><span>Pending payout</span><b>' + money(c.pending_ghs || 0) + '</b></div>' +
+    (list || '<p class="empty">Nobody yet — share your link to start earning.</p>') + '</div>';
+}
+async function loadReferrals() {
+  try {
+    state.referrals = await api('/auth/referrals');
+    if (state.view === 'profile') render();
+  } catch (e) { /* profile still renders without the block data */ }
 }
 function betCardHTML(b) {
   const legs = (b.selections || []).map(l =>
@@ -667,6 +693,7 @@ document.addEventListener('click', e => {
     render();
     if (state.view === 'bets') loadBets();
     if (state.view === 'wallet') loadWallet();
+    if (state.view === 'profile') loadReferrals();
     if (state.view === 'support') loadSupport();
     return;
   }
@@ -954,6 +981,7 @@ $('#authForm').addEventListener('submit', async e => {
     render();
     if (state.view === 'wallet') loadWallet();
     if (state.view === 'bets') loadBets();
+    if (state.view === 'profile') loadReferrals();
   } catch (err) {
     errToast(err, 'Something went wrong.');
   } finally {

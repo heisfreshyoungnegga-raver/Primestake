@@ -1,4 +1,4 @@
-const { sql, send, guard, requireAdmin, ensureAdminTables, inviteCode } = require('../../_lib');
+const { sql, send, guard, requireAdmin, ensureAdminTables, ensureInviteCode } = require('../../_lib');
 
 // Every admin's own dashboard: their user invite link, the users they
 // brought in, and their commission money — earned so far, already paid
@@ -10,15 +10,9 @@ module.exports = guard(async (req, res) => {
   await ensureAdminTables();
 
   // Lazily mint the caller's invite code on first view.
-  let me = await sql('select invite_code from users where id = $1', [auth.uid]);
-  if (!me.length) return send(res, 404, { error: 'account_not_found' });
-  if (!me[0].invite_code) {
-    for (let i = 0; i < 5 && !me[0].invite_code; i++) {
-      const code = inviteCode();
-      const upd = await sql('update users set invite_code = $2 where id = $1 and invite_code is null returning invite_code', [auth.uid, code]);
-      if (upd.length) me = upd;
-    }
-  }
+  const myCode = await ensureInviteCode(auth.uid);
+  if (!myCode) return send(res, 404, { error: 'account_not_found' });
+  const me = [{ invite_code: myCode }];
 
   const [invited, totals, recent] = await Promise.all([
     sql(`select u.id, u.phone, u.display_name, u.created_at,
@@ -55,6 +49,7 @@ module.exports = guard(async (req, res) => {
               (select count(*) from users x where x.invited_by = u.id) as invited_count
        from users u left join commissions c on c.earner_id = u.id
        where u.role in ('admin', 'super_admin')
+          or exists (select 1 from commissions cx where cx.earner_id = u.id)
        group by u.id order by pending desc`
     );
     out.admins = admins.map(a => ({ ...a, earned: Number(a.earned), paid: Number(a.paid), pending: Number(a.pending), invited_count: Number(a.invited_count) }));
