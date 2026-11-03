@@ -1,4 +1,4 @@
-const { sql, hashPassword, issueToken, readBody, send, guard, publicUser, ensureAdminTables } = require('../../_lib');
+const { sql, hashPassword, issueToken, readBody, send, guard, publicUser, ensureAdminTables, ensureInviteCode } = require('../../_lib');
 
 // Registration. Two invite paths can ride along:
 //  - ref=<invite code>: the new account is attributed to whoever shared
@@ -66,6 +66,9 @@ module.exports = guard(async (req, res) => {
     [hasPhone ? cleanPhone : null, cleanEmail || null, hashPassword(String(password)), display_name ? String(display_name).slice(0, 60) : null, role, status, invitedBy]
   );
   const user = rows[0];
+  // Every account owns its special referral link from birth (Prince's
+  // rule, 2026-11-03) — not only after it first opens ME Profile.
+  await ensureInviteCode(user.id);
   if (inviteRow) {
     await sql('update invites set used_by = $1, used_at = now() where id = $2', [user.id, inviteRow.id]);
     if (status === 'pending') return send(res, 201, { pending: true, user: publicUser(user) });
