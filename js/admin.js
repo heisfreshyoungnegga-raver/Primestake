@@ -236,20 +236,36 @@ function controlHTML() {
     '<div class="card"><h3>Pending admin verifications</h3>' + (pendingRows || '<p class="empty">No admins waiting for verification.</p>') + '</div>' +
     '<div class="card"><h3>Referral commissions</h3>' + (commRows || '<p class="empty">No referral earnings yet.</p>') + '</div>';
 }
+// Random fictional team names for the featured-match dice buttons
+// (the server has the same bank for fully-blank submissions).
+const TEAM_A = ['Accra', 'Tema', 'Kumasi', 'Osu', 'Spintex', 'Takoradi', 'Madina', 'Legon', 'Achimota', 'Dansoman', 'Kasoa', 'Ho', 'Tamale', 'Cape Coast', 'Sunyani', 'Koforidua', 'Nungua', 'Teshie', 'Ashaiman', 'Winneba'];
+const TEAM_B = ['Falcons', 'Royals', 'Iron', 'City', 'Stars', 'Lions', 'Warriors', 'United', 'Rovers', 'Athletic', 'Giants', 'Eagles', 'Sharks', 'Kings', 'Pirates', 'Rangers'];
+function randomTeamName(taken) {
+  let n = '';
+  do { n = TEAM_A[Math.floor(Math.random() * TEAM_A.length)] + ' ' + TEAM_B[Math.floor(Math.random() * TEAM_B.length)]; } while (n === taken);
+  return n;
+}
+function toLocalInput(d) {
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
 function featuredFormHTML() {
   if (!superTools()) return '';
   return '<div class="card"><h3>Create a featured match (super admin)</h3>' +
-    '<p class="muted">Your own game: it goes live by itself at kickoff, the clock and score run from your goal schedule, and it settles on the final scheduled score. Double Chance, Over/Under and BTTS prices are built from your 1X2 line.</p>' +
+    '<p class="muted">Type only what you care about — anything left blank is generated for you: random team names, auto odds from the favourite, and a goal schedule that matches the odds. The game goes live by itself at kickoff and settles on the final scheduled score.</p>' +
     '<form id="featForm" class="stack">' +
-    '<label>League <input type="text" id="ffLeague" placeholder="PrimeStake Featured" required></label>' +
-    '<label>Home team <input type="text" id="ffHome" required></label>' +
-    '<label>Away team <input type="text" id="ffAway" required></label>' +
-    '<label>Kickoff <input type="datetime-local" id="ffStart" required></label>' +
+    '<label>League <input type="text" id="ffLeague" placeholder="PrimeStake Featured"></label>' +
+    '<label>Home team <input type="text" id="ffHome" placeholder="Leave blank for a random team"></label>' +
+    '<label>Away team <input type="text" id="ffAway" placeholder="Leave blank for a random team"></label>' +
+    '<div><button class="btn ghost sm" type="button" data-dice="ffHome">🎲 Home name</button> <button class="btn ghost sm" type="button" data-dice="ffAway">🎲 Away name</button></div>' +
+    '<label>Who is favourite? <select id="ffFav"><option value="even">Even match</option><option value="home">Home — slight favourite</option><option value="home_strong">Home — strong favourite</option><option value="away">Away — slight favourite</option><option value="away_strong">Away — strong favourite</option></select></label>' +
+    '<label>Kickoff <input type="datetime-local" id="ffStart"></label>' +
+    '<div><button class="btn ghost sm" type="button" data-kick="15">In 15 min</button> <button class="btn ghost sm" type="button" data-kick="60">In 1 hour</button> <button class="btn ghost sm" type="button" data-kick="tonight">Tonight 7 PM</button></div>' +
     '<div class="oddsgrid">' +
-    '<label>1 (home) <input type="number" step="0.01" min="1.01" id="ff_o1" required></label>' +
-    '<label>X (draw) <input type="number" step="0.01" min="1.01" id="ff_ox" required></label>' +
-    '<label>2 (away) <input type="number" step="0.01" min="1.01" id="ff_o2" required></label></div>' +
-    '<label>Goal schedule — minute:side, comma separated <input type="text" id="ffGoals" placeholder="e.g. 23:home, 57:away, 81:home"></label>' +
+    '<label>1 (home) <input type="number" step="0.01" min="1.01" id="ff_o1" placeholder="Auto"></label>' +
+    '<label>X (draw) <input type="number" step="0.01" min="1.01" id="ff_ox" placeholder="Auto"></label>' +
+    '<label>2 (away) <input type="number" step="0.01" min="1.01" id="ff_o2" placeholder="Auto"></label></div>' +
+    '<label>Goal schedule — minute:side, comma separated (blank = auto) <input type="text" id="ffGoals" placeholder="Auto-generated to match the odds"></label>' +
     '<button class="btn gold big" type="submit">Create Featured Match</button></form></div>';
 }
 function supportHTML() {
@@ -321,6 +337,28 @@ document.addEventListener('click', async e => {
   if (copyBtn) {
     if (navigator.clipboard) navigator.clipboard.writeText(copyBtn.dataset.copy).catch(() => {});
     toast('Copied: ' + copyBtn.dataset.copy);
+    return;
+  }
+  const diceBtn = e.target.closest('[data-dice]');
+  if (diceBtn) {
+    const input = $('#' + diceBtn.dataset.dice);
+    const other = $('#' + (diceBtn.dataset.dice === 'ffHome' ? 'ffAway' : 'ffHome'));
+    if (input) input.value = randomTeamName(other ? other.value : '');
+    return;
+  }
+  const kickBtn = e.target.closest('[data-kick]');
+  if (kickBtn) {
+    const el = $('#ffStart');
+    if (el) {
+      const d = new Date();
+      if (kickBtn.dataset.kick === 'tonight') {
+        d.setHours(19, 0, 0, 0);
+        if (d <= new Date()) d.setDate(d.getDate() + 1);
+      } else {
+        d.setMinutes(d.getMinutes() + Number(kickBtn.dataset.kick));
+      }
+      el.value = toLocalInput(d);
+    }
     return;
   }
   const proofBtn = e.target.closest('[data-proof]');
@@ -510,20 +548,25 @@ document.addEventListener('submit', async e => {
     } catch (err) { toast(err.message); }
   } else if (e.target.id === 'featForm') {
     e.preventDefault();
-    const goals = $('#ffGoals').value.split(',').map(x => x.trim()).filter(Boolean).map(part => {
-      const [min, side] = part.split(':').map(y => (y || '').trim());
-      return { minute: Number(min), side: side === 'away' ? 'away' : 'home' };
-    }).filter(g => g.minute >= 1 && g.minute <= 90);
+    // Blank means AUTO on the server: names, odds (from the
+    // favourite) and the goal schedule are generated there.
+    const body = {
+      league: $('#ffLeague').value.trim(), home_team: $('#ffHome').value.trim(), away_team: $('#ffAway').value.trim(),
+      fav: $('#ffFav').value
+    };
+    if ($('#ffStart').value) body.starts_at = new Date($('#ffStart').value).toISOString();
+    const o1 = Number($('#ff_o1').value), ox = Number($('#ff_ox').value), o2 = Number($('#ff_o2').value);
+    if (o1 > 1 && ox > 1 && o2 > 1) { body.o1 = o1; body.ox = ox; body.o2 = o2; }
+    const goalsText = $('#ffGoals').value.trim();
+    if (goalsText) {
+      body.goals = goalsText.split(',').map(x => x.trim()).filter(Boolean).map(part => {
+        const [min, side] = part.split(':').map(y => (y || '').trim());
+        return { minute: Number(min), side: side === 'away' ? 'away' : 'home' };
+      }).filter(g => g.minute >= 1 && g.minute <= 90);
+    }
     try {
-      await api('/admin/create-match', {
-        method: 'POST',
-        body: {
-          league: $('#ffLeague').value.trim(), home_team: $('#ffHome').value.trim(), away_team: $('#ffAway').value.trim(),
-          starts_at: new Date($('#ffStart').value).toISOString(),
-          o1: Number($('#ff_o1').value), ox: Number($('#ff_ox').value), o2: Number($('#ff_o2').value), goals
-        }
-      });
-      toast('Featured match created — it plays by the clock from kickoff.');
+      const data = await api('/admin/create-match', { method: 'POST', body });
+      toast('Created: ' + data.match.home_team + ' vs ' + data.match.away_team + ' — it plays by the clock from kickoff.');
       loadAll();
     } catch (err) { toast(err.message); }
   } else if (e.target.id === 'matchForm') {
