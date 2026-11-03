@@ -725,11 +725,12 @@ function closeMenu() { const w = $('#drawerWrap'); if (w) w.hidden = true; }
 function syncHeader() {
   const ha = $('#headActions');
   if (state.user) {
-    // Header shows the account's mobile number plus a Deposit shortcut
-    // (Prince's layout, 2026-11-03): the balance lives in Wallet/Profile.
-    // The button's own listener primes the wallet on the deposit section
-    // before the shared nav handler switches the view.
-    ha.innerHTML = '<span class="userchip">' + esc(state.user.phone) + '</span>' +
+    // Header shows the account balance plus a Deposit shortcut (Prince's
+    // layout, 2026-11-03 — he first asked for the number here, then chose
+    // the balance instead; the number lives in ME Profile). The button's
+    // own listener primes the wallet on the deposit section before the
+    // shared nav handler switches the view.
+    ha.innerHTML = '<span class="userchip">' + money(state.user.balance_ghs) + '</span>' +
       '<button class="btn gold" id="headDeposit" data-nav="wallet">Deposit</button>';
     $('#headDeposit').addEventListener('click', () => {
       state.walletSection = 'deposit';
