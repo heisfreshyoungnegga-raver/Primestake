@@ -707,6 +707,10 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 .md-sec h3 { margin-top: 0; }
 .md-teams .team { font-size: 17px; font-weight: 700; padding: 2px 0; }
 .md-when { color: var(--muted); margin: 4px 0 8px; }
+.mteams .team, .md-teams .team { display: flex; align-items: center; gap: 6px; }
+.team .tname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tscore { margin-left: auto; padding-left: 8px; font-weight: 800; color: var(--gold); }
+.md-teams .tscore { font-size: 18px; }
 .filtercard .searchbar { position: relative; }
 .filtercard .searchbar input {
   width: 100%; padding: 12px 14px 12px 40px; font-size: 15px;

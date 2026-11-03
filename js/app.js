@@ -171,16 +171,22 @@ function oddsHTML(m) {
 function rowHTML(m) {
   let time;
   if (m.status === 'live') {
-    time = '<span class="live-min">' + (m.minute != null ? m.minute + '&prime;' : 'LIVE') + '</span>' +
-      '<span class="score">' + m.sh + ' - ' + m.sa + '</span>';
+    time = '<span class="live-min">' + (m.minute != null ? m.minute + '&prime;' : 'LIVE') + '</span>';
   } else {
     time = '<span>' + fmtDate(m.starts_at) + '</span>';
   }
+  // Live scores sit beside each team name (Prince's ask, 2026-11-03)
+  // and update with the automatic ESPN refresh like the rest of the
+  // row — no separate score column.
+  const teamLine = (name, logo, score) =>
+    '<div class="team">' + (logo ? '<img class="tlogo" src="' + esc(logo) + '" alt="" loading="lazy" onerror="this.remove()">' : '') +
+    '<span class="tname">' + esc(name) + '</span>' +
+    (score != null ? '<span class="tscore">' + score + '</span>' : '') + '</div>';
   return '<div class="mrow" data-match="' + m.id + '">' +
     '<div class="mtime">' + time + '</div>' +
     '<div class="mteams"><div class="league">' + esc(m.league) + '</div>' +
-    '<div class="team">' + (m.home_logo ? '<img class="tlogo" src="' + esc(m.home_logo) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + esc(m.home) + '</div>' +
-    '<div class="team">' + (m.away_logo ? '<img class="tlogo" src="' + esc(m.away_logo) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + esc(m.away) + '</div></div>' +
+    teamLine(m.home, m.home_logo, m.status === 'live' ? m.sh : null) +
+    teamLine(m.away, m.away_logo, m.status === 'live' ? m.sa : null) + '</div>' +
     '<div class="odds">' + oddsHTML(m) + '</div></div>';
 }
 function groupHTML(title, list, live) {
@@ -207,12 +213,12 @@ function matchDetailsHTML() {
   const back = '<button class="btn ghost" data-back style="margin:10px 0">‹ Back</button>';
   if (!m) return back + '<div class="card"><h3>Match not available</h3><p class="muted">It may have finished or been removed.</p></div>';
   const when = m.status === 'live'
-    ? '<span class="live-min">' + (m.minute != null ? m.minute + '&prime;' : 'LIVE') + '</span> <span class="score">' + m.sh + ' - ' + m.sa + '</span>'
+    ? '<span class="live-min">' + (m.minute != null ? m.minute + '&prime;' : 'LIVE') + '</span>'
     : esc(fmtDate(m.starts_at));
-  const team = (name, logo) => '<div class="team">' + (logo ? '<img class="tlogo" src="' + esc(logo) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + esc(name) + '</div>';
+  const team = (name, logo, score) => '<div class="team">' + (logo ? '<img class="tlogo" src="' + esc(logo) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '<span class="tname">' + esc(name) + '</span>' + (score != null ? '<span class="tscore">' + score + '</span>' : '') + '</div>';
   let html = back + '<div class="card"><div class="league">' + esc(m.league) + '</div>' +
     '<div class="md-when">' + when + '</div>' +
-    '<div class="md-teams">' + team(m.home, m.home_logo) + team(m.away, m.away_logo) + '</div></div>';
+    '<div class="md-teams">' + team(m.home, m.home_logo, m.status === 'live' ? m.sh : null) + team(m.away, m.away_logo, m.status === 'live' ? m.sa : null) + '</div></div>';
   for (const market of MARKET_LIST) {
     const opts = marketsForMarket(m, market);
     if (!opts.length) continue;
