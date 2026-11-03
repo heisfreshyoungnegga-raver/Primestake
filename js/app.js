@@ -638,12 +638,16 @@ function render() {
   root.innerHTML = viewHTML();
   document.querySelectorAll('.navlink').forEach(b =>
     b.classList.toggle('active', b.dataset.nav === state.view));
+  document.querySelectorAll('.bn-item').forEach(b =>
+    b.classList.toggle('on', b.dataset.nav === state.view));
   if ($('#mmFeeLine')) syncMomoFee();
 }
 
 /* ---------- betslip ---------- */
 function renderSlip() {
   $('#slipCount').textContent = state.slip.size;
+  const bnCount = $('#bnSlipCount');
+  if (bnCount) bnCount.textContent = state.slip.size;
   const body = $('#slipBody');
   const foot = $('#slipFoot');
   if (!state.slip.size) {
@@ -1015,6 +1019,7 @@ document.addEventListener('input', e => {
 });
 
 $('#slipFab').addEventListener('click', openSlip);
+$('#bnSlip').addEventListener('click', openSlip);
 $('#slipClose').addEventListener('click', closeSlip);
 $('#scrim').addEventListener('click', closeSlip);
 $('#loginBtn').addEventListener('click', () => openAuth('login'));

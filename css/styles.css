@@ -821,3 +821,39 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .drawer-x { background: none; border: none; color: var(--gold); font-size: 26px; cursor: pointer; line-height: 1; }
 .dlink { text-align: left; background: #161618; border: 1px solid #26262a; color: #f2f2f2; border-radius: 10px; padding: 14px 16px; font-size: 16px; font-weight: 700; cursor: pointer; }
 .dlink:hover { border-color: var(--gold); color: var(--gold); }
+
+/* ----- mobile bottom navigation (2026-11-03) -----
+   Black app-style bar with a raised gold betslip button in the centre,
+   as in the reference Prince sent. Shown on phone widths only; there it
+   replaces the floating betslip pill. Sits below the drawers/modals so
+   an open slip or menu covers it. */
+.bottomnav { display: none; }
+@media (max-width: 860px) {
+  .bottomnav {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 44;
+    background: #0b0b0d; border-top: 1px solid rgba(245, 197, 24, .35);
+    align-items: flex-end; justify-content: space-around;
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+  }
+  .bn-item {
+    background: none; border: 0; color: #c9c9c9; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    font-size: 10.5px; font-weight: 600; padding: 4px 4px; min-width: 56px;
+  }
+  .bn-item svg { width: 22px; height: 22px; }
+  .bn-item.on { color: var(--gold); }
+  .bn-slip {
+    position: relative; flex: 0 0 auto; width: 58px; height: 58px; margin-top: -26px;
+    border-radius: 50%; border: 3px solid #0b0b0d; background: var(--gold-grad);
+    color: #141414; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .45);
+  }
+  .bn-slip svg { width: 26px; height: 26px; }
+  .bn-badge {
+    position: absolute; top: -5px; right: -5px; min-width: 20px; height: 20px;
+    background: #e01e26; color: #fff; border: 2px solid #0b0b0d; border-radius: 999px;
+    font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; padding: 0 5px;
+  }
+  .slipfab { display: none; }
+  body { padding-bottom: 62px; }
+}
