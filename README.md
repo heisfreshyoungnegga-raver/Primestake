@@ -27,3 +27,4 @@ codes, and a mobile money wallet.
 
 Until both are set, the API answers 503 `backend_not_configured` and
 the site shows a "being set up" state instead of data.
+
