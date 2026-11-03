@@ -19,6 +19,7 @@ const handlers = {
   bonus: require('../_handlers/admin/bonus'),
   'my-dashboard': require('../_handlers/admin/my-dashboard'),
   payout: require('../_handlers/admin/payout'),
+  'delete-user': require('../_handlers/admin/delete-user'),
 };
 module.exports = (req, res) => {
   const action = (req.query && req.query.action) || String(req.url || '').split('?')[0].split('/').pop();

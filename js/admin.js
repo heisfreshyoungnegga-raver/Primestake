@@ -128,7 +128,8 @@ function usersHTML() {
     (state.user && state.user.role === 'super_admin' && u.id !== state.user.id
       ? ' <button class="btn ghost sm" data-role="' + u.id + '" data-as="admin">Make Admin</button>' +
         ' <button class="btn ghost sm" data-role="' + u.id + '" data-as="super_admin">Make Super</button>' +
-        ' <button class="btn ghost sm" data-role="' + u.id + '" data-as="player">Make Player</button>'
+        ' <button class="btn ghost sm" data-role="' + u.id + '" data-as="player">Make Player</button>' +
+        ' <button class="btn ghost sm" data-del-user="' + u.id + '">Delete</button>'
       : '') + '</span></div>').join('');
   return tabsHTML() + '<div class="card"><h3>Users</h3>' + (rows || '<p class="empty">No users yet.</p>') + '</div>';
 }
@@ -325,6 +326,17 @@ document.addEventListener('click', async e => {
     try {
       const data = await api('/admin/balance-edit', { method: 'POST', body: { id: balBtn.dataset.balEdit, delta_ghs: Number(delta), note } });
       toast('New balance: ' + money(data.balance_ghs));
+      loadAll();
+    } catch (err) { toast(err.message); }
+    return;
+  }
+  const delBtn = e.target.closest('[data-del-user]');
+  if (delBtn) {
+    const u = state.users.find(x => x.id === delBtn.dataset.delUser);
+    if (!confirm('Permanently delete ' + (u ? u.phone : 'this account') + ' and all its bets, deposits and history? This cannot be undone.')) return;
+    try {
+      const data = await api('/admin/delete-user', { method: 'POST', body: { id: delBtn.dataset.delUser } });
+      toast('Deleted ' + data.deleted + '.');
       loadAll();
     } catch (err) { toast(err.message); }
     return;
