@@ -1,4 +1,4 @@
-const { sql } = require('./_lib');
+const { sql, expandOdds } = require('./_lib');
 
 // ESPN fixture sync, shared by the admin Sync button and the automatic
 // live refresh. Pulls scoreboards from ESPN's public API (no key needed)
@@ -94,6 +94,15 @@ function oddsFromEspn(comp) {
   if (odds.o1 && odds.ox) odds.dc1x = Math.round((odds.o1 * odds.ox) / (odds.o1 + odds.ox) * 100) / 100;
   if (odds.o1 && odds.o2) odds.dc12 = Math.round((odds.o1 * odds.o2) / (odds.o1 + odds.o2) * 100) / 100;
   if (odds.ox && odds.o2) odds.dcx2 = Math.round((odds.ox * odds.o2) / (odds.ox + odds.o2) * 100) / 100;
+  // Fill whatever ESPN did not publish — most often the totals when
+  // the feed carries no 2.5 line, and Both Teams To Score, which it
+  // never carries — from the 1X2 book, so every match holds the full
+  // market set the match details page shows. ESPN's own prices
+  // always win where they exist.
+  if (odds.o1 && odds.ox && odds.o2) {
+    const full = expandOdds(odds.o1, odds.ox, odds.o2);
+    for (const k of Object.keys(full)) if (odds[k] === undefined) odds[k] = full[k];
+  }
   Object.keys(odds).forEach(k => { if (!(odds[k] > 1)) delete odds[k]; });
   return odds;
 }
