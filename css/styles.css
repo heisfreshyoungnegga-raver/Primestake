@@ -7,6 +7,7 @@
   --card-dark: #1c1c1e;
   --ticker-bg: #141414;
   --accent: #f5c518;
+  --gold: #f5c518;
   --accent-ink: #141414;
   --live: #d8232a;
   --live-ink: #ffffff;
@@ -836,12 +837,25 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
   }
   .bn-item {
-    background: none; border: 0; color: #c9c9c9; cursor: pointer;
+    background: none; border: 0; color: #c9c9c9; cursor: pointer; position: relative;
+    -webkit-tap-highlight-color: transparent;
     display: flex; flex-direction: column; align-items: center; gap: 3px;
     font-size: 10.5px; font-weight: 600; padding: 4px 4px; min-width: 56px;
   }
   .bn-item svg { width: 22px; height: 22px; }
-  .bn-item.on { color: var(--gold); }
+  /* Active tab: bright gold icon + label on a soft gold pill, with a
+     gold bar on the nav's top edge — unmissable on the black bar. (The
+     first version only set color: var(--gold), and --gold was never
+     defined in :root, so the active tab fell back to near-black and
+     vanished on the bar — Prince's screenshot, 2026-11-03.) */
+  .bn-item.on {
+    color: var(--gold); background: rgba(245, 197, 24, .14); border-radius: 12px;
+    box-shadow: inset 0 0 0 1px rgba(245, 197, 24, .45);
+  }
+  .bn-item.on::before {
+    content: ''; position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
+    width: 26px; height: 3px; border-radius: 2px; background: var(--gold);
+  }
   .bn-slip {
     position: relative; flex: 0 0 auto; width: 58px; height: 58px; margin-top: -26px;
     border-radius: 50%; border: 3px solid #0b0b0d; background: var(--gold-grad);
