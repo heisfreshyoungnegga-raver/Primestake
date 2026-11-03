@@ -61,9 +61,11 @@ create table if not exists bets (
   total_odds numeric(10, 3) not null,
   potential_ghs numeric(12, 2) not null,
   status text not null default 'open' check (status in ('open', 'won', 'lost', 'cashed_out', 'void')),
+  cashout_ghs numeric(12, 2),
   placed_at timestamptz not null default now(),
   settled_at timestamptz
 );
+alter table bets add column if not exists cashout_ghs numeric(12, 2);
 create index if not exists bets_user_idx on bets (user_id, placed_at desc);
 create index if not exists bets_code_idx on bets (code);
 

@@ -181,6 +181,61 @@ function pickWon(market, pick, home, away) {
   }
 }
 
+// Picks that a live score can already decide before full time.
+// Totals and Both Teams To Score can settle early; 1X2, Double
+// Chance and Handicap stay open until the whistle.
+function livePickState(market, pick, home, away) {
+  const ou = /^Over\/Under (\d+\.\d)$/.exec(market);
+  if (ou) {
+    const line = parseFloat(ou[1]);
+    const total = home + away;
+    if (pick === 'Over ' + ou[1]) return total > line ? 'won' : 'open';
+    return total > line ? 'lost' : 'open';
+  }
+  if (market === 'Both Teams To Score') {
+    if (home > 0 && away > 0) return pick === 'Yes' ? 'won' : 'lost';
+    return 'open';
+  }
+  return 'open';
+}
+
+// Cashout offer for an open bet (Stakeza-style cashout, Prince's ask
+// 2026-11-03): the stake scaled by how each selection's price has
+// moved since placement, less a 5% operator margin, floored to
+// whole pesewas and capped at the ticket's potential payout. A leg
+// the live score has already won counts at its full placed price; a
+// leg it has already lost kills the offer. Featured (custom)
+// matches only offer before kickoff — their prices do not move
+// once the game is live, so a live offer could be gamed.
+function cashoutQuote(bet, sels, matchesById) {
+  if (!sels || !sels.length) return null;
+  let ratio = 1;
+  for (const s of sels) {
+    const m = matchesById[s.match_id];
+    if (!m) return null;
+    let status = m.status;
+    let sh = Number(m.score_home || 0), sa = Number(m.score_away || 0);
+    if (isCustomMatch(m)) {
+      const st = customMatchState(m);
+      status = st.status; sh = st.score_home; sa = st.score_away;
+      if (status !== 'upcoming') return null;
+    }
+    if (status === 'finished') return null;
+    if (status === 'live') {
+      const st = livePickState(s.market, s.pick, sh, sa);
+      if (st === 'lost') return null;
+      if (st === 'won') { ratio *= Number(s.odds); continue; }
+    }
+    const key = keyFor(s.market, s.pick);
+    const cur = key ? Number(fillOdds(m.odds)[key]) : NaN;
+    if (!(cur > 1)) return null;
+    ratio *= Number(s.odds) / cur;
+  }
+  const raw = Number(bet.stake_ghs) * ratio * 0.95;
+  const amt = Math.floor(Math.min(raw, Number(bet.potential_ghs)) * 100) / 100;
+  return amt > 0 ? amt : null;
+}
+
 // ---- ShinobiPay (direct MoMo push deposits) --------------------------
 // The secret key lives ONLY in server env (SHINOBIPAY_SECRET_KEY); it is
 // never sent to the browser and never logged. The webhook signing secret
@@ -470,4 +525,4 @@ async function ensureInviteCode(userId) {
   return null;
 }
 
-module.exports = { sql, hashPassword, verifyPassword, issueToken, readBody, send, requireAuth, requireAdmin, requireSuperAdmin, guard, publicUser, betCode, MARKETS, keyFor, pickWon, shinobiConfig, shinobiFetch, mapIntentStatus, detectNetwork, ensurePaymentTables, ensureAdminTables, getSettings, applyDepositRewards, isCustomMatch, customMatchState, expandOdds, fillOdds, inviteCode, ensureInviteCode };
+module.exports = { sql, hashPassword, verifyPassword, issueToken, readBody, send, requireAuth, requireAdmin, requireSuperAdmin, guard, publicUser, betCode, MARKETS, keyFor, pickWon, shinobiConfig, shinobiFetch, mapIntentStatus, detectNetwork, ensurePaymentTables, ensureAdminTables, getSettings, applyDepositRewards, isCustomMatch, customMatchState, expandOdds, fillOdds, livePickState, cashoutQuote, inviteCode, ensureInviteCode };

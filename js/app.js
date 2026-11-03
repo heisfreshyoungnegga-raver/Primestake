@@ -12,6 +12,7 @@ const state = {
   query: '',
   filtersOpen: false,
   matchId: null, prevView: 'home',
+  cashoutArm: null,
   slip: new Map(), // key -> {matchId, matchLabel, league, market, pick, odd}
   user: null,
   token: localStorage.getItem('ps_token') || '',
@@ -82,6 +83,7 @@ async function api(path, opts = {}) {
     const err = new Error(data.error || 'request_failed');
     err.code = data.error || 'request_failed';
     err.detail = data.detail || '';
+    err.data = data;
     throw err;
   }
   return data;
@@ -97,6 +99,8 @@ function errToast(e, fallback) {
     invalid_phone: 'Enter a valid phone number.',
     account_blocked: 'This account has been blocked. Contact support.',
     withdrawal_locked: 'Withdrawals are not available on your account yet — please contact support.',
+    cashout_unavailable: 'Cashout is not available for this ticket right now.',
+    bet_not_open: 'This ticket is no longer open.',
     match_finished: 'One of those matches has already finished.',
     one_selection_per_match: 'Only one selection per match on a slip.',
     market_unavailable: 'One of those markets is not available right now.',
@@ -402,8 +406,9 @@ function gateHTML(title) {
     '<button class="btn gold big" data-open-auth>Login</button></div>';
 }
 function statusChip(s) {
-  const cls = s === 'completed' || s === 'won' ? 'completed' : s === 'rejected' || s === 'lost' ? 'rejected' : 'pending';
-  return '<span class="st st-' + cls + '">' + String(s).toUpperCase() + '</span>';
+  const cls = s === 'completed' || s === 'won' || s === 'cashed_out' ? 'completed' : s === 'rejected' || s === 'lost' ? 'rejected' : 'pending';
+  const label = s === 'cashed_out' ? 'CASHED OUT' : String(s).toUpperCase();
+  return '<span class="st st-' + cls + '">' + label + '</span>';
 }
 function profileHTML() {
   if (!state.user) {
@@ -451,15 +456,25 @@ function betCardHTML(b) {
     '<div class="leg"><span>' + esc(l.home_team || '') + ' vs ' + esc(l.away_team || '') + '</span>' +
     '<span>' + esc(l.pick) + ' · ' + esc(l.market) + ' · <b>' + Number(l.odds).toFixed(2) + '</b></span>' +
     '<span class="legres">' + esc(l.result || '') + '</span></div>').join('');
+  let foot = '';
+  if (b.status === 'cashed_out' && b.cashout_ghs != null) {
+    foot = '<div class="card-row"><span>Cashed out</span><b>' + money(b.cashout_ghs) + '</b></div>';
+  } else if (b.status === 'open' && b.cashout_offer) {
+    const armed = state.cashoutArm && state.cashoutArm.id === b.id && Date.now() - state.cashoutArm.at < 5000;
+    foot = '<button class="btn gold big" data-cashout="' + b.id + '">' +
+      (armed ? 'Tap again to confirm — ' : '') + 'Cashout ' + money(b.cashout_offer) + '</button>';
+  }
   return '<div class="card"><div class="card-head"><b>' + esc(b.code) + '</b>' + statusChip(b.status) + '</div>' +
     '<p class="muted">' + fmtDate(b.placed_at) + '</p>' + legs +
     '<div class="card-row"><span>Stake</span><b>' + money(b.stake_ghs) + '</b></div>' +
     '<div class="card-row"><span>Total odds</span><b>' + Number(b.total_odds).toFixed(2) + '</b></div>' +
-    '<div class="card-row"><span>Potential win</span><b>' + money(b.potential_ghs) + '</b></div></div>';
+    '<div class="card-row"><span>Potential win</span><b>' + money(b.potential_ghs) + '</b></div>' + foot + '</div>';
 }
 function betsHTML() {
   if (!state.user) return gateHTML('My Bets');
+  const anyOffer = state.myBets.some(b => b.status === 'open' && b.cashout_offer);
   return '<h2>My Bets</h2>' +
+    (anyOffer ? '<div class="card cashbar"><b>Cashout available now!</b><p class="muted">Settle an open ticket early and take the offer on it below.</p></div>' : '') +
     (state.myBets.length ? state.myBets.map(betCardHTML).join('') : '<p class="empty">No bets yet — add odds to your slip and place your first bet.</p>');
 }
 async function loadBets() {
@@ -470,16 +485,48 @@ async function loadBets() {
   if (state.view === 'bets') render();
 }
 function withdrawCardHTML(w) {
-  // The deposit-count withdrawal rule stays enforced server-side, but
-  // players never see the counter or the requirement (Prince's call,
-  // 2026-11-03): the card is a plain withdraw form, and a not-yet-eligible
-  // request comes back with the generic toast so support handles it.
+  // The deposit-count withdrawal rule is enforced server-side by the
+  // database trigger. Since Prince's Stakeza-style redesign
+  // (2026-11-03, reversing the morning's invisible-rule call), a
+  // not-yet-eligible request opens the verification prompt below,
+  // which shows how many deposits remain — it no longer hides
+  // behind the generic support toast.
   return '<div class="card"><h3>Withdraw</h3>' +
     '<form id="withdrawForm" class="stack">' +
     '<label>Amount (GHS) <input type="number" id="wdAmt" min="1" value="50" required></label>' +
     '<label>Pay to <select id="wdMethod"><option>MTN MoMo</option><option>Telecel Cash</option><option>AT Money</option></select></label>' +
     '<button class="btn gold big" type="submit">Request Withdrawal</button></form>' +
     '<p class="muted">The amount is held from your balance when you request; it is paid out after review. A rejected request refunds the hold.</p></div>';
+}
+// Verification prompt (Stakeza-style, Prince's ask 2026-11-03): a
+// player short of the required deposits who requests a withdrawal
+// gets this instead of a dead-end toast — how many deposits remain,
+// a progress bar, and a straight path to the deposit form.
+function showVerifyModal(info) {
+  closeVerifyModal();
+  const done = Number(info && info.deposits_done) || 0;
+  const required = Number(info && info.deposits_required) || 6;
+  const remaining = Math.max(required - done, 0);
+  const pct = Math.min(100, Math.round((done / required) * 100));
+  const el = document.createElement('div');
+  el.className = 'modalwrap open';
+  el.id = 'verifyWrap';
+  el.innerHTML = '<div class="modal">' +
+    '<button class="iconbtn modal-x" data-close-verify aria-label="Close">&times;</button>' +
+    '<p class="modal-sub">First verification</p>' +
+    '<h2>Complete your verification</h2>' +
+    '<p>Make <b>' + remaining + ' more deposit' + (remaining === 1 ? '' : 's') + '</b> to unlock withdrawals on your PrimeStake account.</p>' +
+    '<div class="vbar"><i style="width:' + pct + '%"></i></div>' +
+    '<p class="muted">' + done + ' of ' + required + ' deposits completed</p>' +
+    '<button class="btn gold big" data-goto-deposit>Deposit now</button>' +
+    '<button class="btn ghost big" data-done-verify>I\'ve completed a deposit</button>' +
+    '<p class="muted">Deposits go to your own betting wallet. The money stays yours to bet with — it is not a fee, and nothing is taken from your balance to release a withdrawal.</p>' +
+    '</div>';
+  document.body.appendChild(el);
+}
+function closeVerifyModal() {
+  const el = $('#verifyWrap');
+  if (el) el.remove();
 }
 /* ----- Instant MoMo deposit (ShinobiPay direct push) ----- */
 function detectNetworkJS(raw) {
@@ -900,6 +947,39 @@ document.addEventListener('click', e => {
     render();
     return;
   }
+  if (e.target.id === 'verifyWrap' || e.target.closest('[data-close-verify]')) {
+    closeVerifyModal();
+    return;
+  }
+  if (e.target.closest('[data-done-verify]')) {
+    closeVerifyModal();
+    loadWallet();
+    return;
+  }
+  if (e.target.closest('[data-goto-deposit]')) {
+    closeVerifyModal();
+    const amt = $('#mmAmt');
+    if (amt) amt.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  const coBtn = e.target.closest('[data-cashout]');
+  if (coBtn) {
+    const id = coBtn.dataset.cashout;
+    if (!(state.cashoutArm && state.cashoutArm.id === id && Date.now() - state.cashoutArm.at < 5000)) {
+      state.cashoutArm = { id, at: Date.now() };
+      render();
+      return;
+    }
+    state.cashoutArm = null;
+    api('/bets/cashout', { method: 'POST', body: { bet_id: id } })
+      .then(d => {
+        toast('Cashed out ' + money(d.cashout_ghs) + ' — credited to your balance.');
+        refreshUser();
+        loadBets();
+      })
+      .catch(err => { errToast(err, 'Cashout failed.'); loadBets(); });
+    return;
+  }
   const mrow = e.target.closest('[data-match]');
   if (mrow && !e.target.closest('button, a, input, select, textarea')) {
     state.prevView = ['home', 'live', 'sports', 'virtual'].includes(state.view) ? state.view : 'home';
@@ -1048,7 +1128,10 @@ document.addEventListener('submit', async e => {
       });
       toast('Withdrawal requested — the amount is held and paid out after review.');
       loadWallet();
-    } catch (err) { errToast(err, 'Withdrawal request failed.'); }
+    } catch (err) {
+      if (err.code === 'withdrawal_locked') { showVerifyModal(err.data || {}); return; }
+      errToast(err, 'Withdrawal request failed.');
+    }
   } else if (id === 'verifyForm') {
     e.preventDefault();
     const code = $('#verifyCode').value.trim().toUpperCase();

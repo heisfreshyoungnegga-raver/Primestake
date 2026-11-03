@@ -711,6 +711,10 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 .team .tname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tscore { margin-left: auto; padding-left: 8px; font-weight: 800; color: var(--gold); }
 .md-teams .tscore { font-size: 18px; }
+.vbar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 14px 0 6px; }
+.vbar i { display: block; height: 100%; background: var(--gold); }
+#verifyWrap .btn { width: 100%; margin-top: 10px; }
+.cashbar { border: 1px solid var(--gold); }
 .filtercard .searchbar { position: relative; }
 .filtercard .searchbar input {
   width: 100%; padding: 12px 14px 12px 40px; font-size: 15px;
