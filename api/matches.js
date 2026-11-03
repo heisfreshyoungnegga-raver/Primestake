@@ -1,4 +1,5 @@
 const { sql, send, guard, isCustomMatch, customMatchState } = require('./_lib');
+const { maybeRefreshLive } = require('./_espn');
 
 // Public match list: live matches first, then upcoming by start time.
 // Super-admin "featured" matches (external_ref custom:...) carry a goal
@@ -7,6 +8,11 @@ const { sql, send, guard, isCustomMatch, customMatchState } = require('./_lib');
 // no one touching them. A featured match that has run its 95 minutes
 // stays visible as a result for 3 hours, then drops off.
 module.exports = guard(async (req, res) => {
+  // Live matches keep themselves current: the first list request after
+  // a quiet couple of minutes refreshes statuses, scores and minutes
+  // from ESPN before answering (see maybeRefreshLive). A feed failure
+  // must never break the list, so errors are swallowed.
+  await maybeRefreshLive().catch(() => {});
   const rows = await sql(
     `select id, league, home_team, away_team, starts_at, status, minute,
             score_home, score_away, odds, home_logo, away_logo, external_ref, goal_events

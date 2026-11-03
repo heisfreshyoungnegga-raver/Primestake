@@ -1081,6 +1081,14 @@ setInterval(() => {
   if ($('.hero')) render();
 }, 6000);
 
+// Live scores keep moving while a match view is open: re-pull the feed
+// about once a minute (the API refreshes from ESPN itself when stale,
+// and loadMatches re-renders the match views).
+setInterval(() => {
+  if (document.hidden) return;
+  if (['home', 'live', 'sports', 'virtual'].includes(state.view)) loadMatches();
+}, 60000);
+
 // Invite links land here first: remember the attribution / invite
 // token, then let registration pick it up.
 const urlParams = new URLSearchParams(location.search);
