@@ -329,8 +329,12 @@ function trustStripHTML() {
     ['Booking codes', 'Share slips with one code'],
     ['24/7 support', 'FAQs and in-app messages'],
   ];
-  return '<div class="truststrip">' + items.map(i =>
-    '<div class="trust"><b>' + i[0] + '</b><span>' + i[1] + '</span></div>').join('') + '</div>';
+  // One sliding line (duplicated half for a seamless loop), not the
+  // old 2x2 card grid — frees the space above the matches.
+  const half = items.map(i =>
+    '<span class="titem"><b>' + i[0] + '</b> ' + i[1] + '</span>').join('<span class="tdot">•</span>') +
+    '<span class="tdot">•</span>';
+  return '<div class="trustslide"><div class="trust-track">' + half + half + '</div></div>';
 }
 
 /* ---------- account pages ---------- */
