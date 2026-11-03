@@ -55,6 +55,21 @@ async function api(path, opts = {}) {
   if (!res.ok) throw new Error(data.detail || data.error || 'request_failed');
   return data;
 }
+// Full-screen viewer for a deposit's transaction screenshot; tap
+// anywhere to close. The image arrives as a data URL from the API.
+function showProof(src) {
+  const old = $('#proofOverlay');
+  if (old) old.remove();
+  const d = document.createElement('div');
+  d.id = 'proofOverlay';
+  d.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:99;display:flex;align-items:center;justify-content:center;padding:16px';
+  const img = document.createElement('img');
+  img.src = src;
+  img.style.cssText = 'max-width:100%;max-height:100%;border-radius:8px';
+  d.appendChild(img);
+  d.addEventListener('click', () => d.remove());
+  document.body.appendChild(d);
+}
 function chip(s) {
   const cls = s === 'completed' || s === 'won' || s === 'active' ? 'completed' : s === 'rejected' || s === 'lost' || s === 'blocked' ? 'rejected' : 'pending';
   return '<span class="st st-' + cls + '">' + String(s).toUpperCase() + '</span>';
@@ -113,7 +128,8 @@ function queueHTML(compact) {
     '<div class="txrow"><div><b>' + esc(q.kind) + ' · ' + esc(q.phone) + '</b>' +
     '<div class="muted">' + fmtDate(q.created_at) + ' · ' + esc(q.method || '') + (q.external_ref ? ' · Ref ' + esc(q.external_ref) : '') + '</div></div>' +
     '<div>' + money(q.amount_ghs) + '</div>' +
-    '<span><button class="btn gold sm" data-confirm="' + q.id + '">Confirm</button> ' +
+    '<span>' + (q.has_proof ? '<button class="btn ghost sm" data-proof="' + q.id + '">Screenshot</button> ' : '') +
+    '<button class="btn gold sm" data-confirm="' + q.id + '">Confirm</button> ' +
     '<button class="btn ghost sm" data-reject="' + q.id + '">Reject</button></span></div>').join('');
   return '<div class="card"><h3>Deposits &amp; withdrawals queue</h3>' +
     (rows || '<p class="empty">Nothing waiting for review.</p>') + '</div>' +
@@ -305,6 +321,14 @@ document.addEventListener('click', async e => {
   if (copyBtn) {
     if (navigator.clipboard) navigator.clipboard.writeText(copyBtn.dataset.copy).catch(() => {});
     toast('Copied: ' + copyBtn.dataset.copy);
+    return;
+  }
+  const proofBtn = e.target.closest('[data-proof]');
+  if (proofBtn) {
+    try {
+      const d = await api('/admin/deposit-proof?id=' + encodeURIComponent(proofBtn.dataset.proof));
+      showProof(d.proof_image);
+    } catch (err) { toast(err.message); }
     return;
   }
   const toggleBtn = e.target.closest('[data-toggle]');

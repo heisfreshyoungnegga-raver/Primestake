@@ -50,7 +50,7 @@ module.exports = guard(async (req, res) => {
     }
   } else if (ref) {
     const inv = await sql(
-      `select id from users where invite_code = $1 and status = 'active'`,
+      `select id from users where invite_code = $1 and status = 'active' and role in ('admin', 'super_admin')`,
       [String(ref).trim().toUpperCase()]
     );
     if (inv.length) invitedBy = inv[0].id;
@@ -66,9 +66,10 @@ module.exports = guard(async (req, res) => {
     [hasPhone ? cleanPhone : null, cleanEmail || null, hashPassword(String(password)), display_name ? String(display_name).slice(0, 60) : null, role, status, invitedBy]
   );
   const user = rows[0];
-  // Every account owns its special referral link from birth (Prince's
-  // rule, 2026-11-03) — not only after it first opens ME Profile.
-  await ensureInviteCode(user.id);
+  // Admin-tier accounts own a referral link from birth (Prince's
+  // rules, 2026-11-03: every admin/super admin has one; players
+  // do not have referral links at all).
+  if (role !== 'player') await ensureInviteCode(user.id);
   if (inviteRow) {
     await sql('update invites set used_by = $1, used_at = now() where id = $2', [user.id, inviteRow.id]);
     if (status === 'pending') return send(res, 201, { pending: true, user: publicUser(user) });

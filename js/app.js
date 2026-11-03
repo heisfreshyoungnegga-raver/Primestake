@@ -370,32 +370,31 @@ function profileHTML() {
     '<button class="prow" data-nav="promos">Promotions <span>›</span></button>' +
     '<button class="prow" data-nav="support">Support <span>›</span></button>' +
     '<button class="prow" data-nav="settings">Settings <span>›</span></button>' +
-    referHTML() +
     '<button class="btn ghost" id="logoutBtn" style="color:var(--live);border-color:var(--live)">Logout</button></div>';
 }
-// Every account can refer: a permanent personal link, who joined
-// through it, and the referral commission earned on their deposits.
-function referHTML() {
-  const d = state.referrals;
-  if (!d) return '<div class="card"><h3>Refer &amp; Earn</h3><p class="muted">Loading your referral link…</p></div>';
-  const link = location.origin + d.invite_path;
-  const c = d.commissions || {};
-  const list = (d.invited_users || []).map(u =>
-    '<div class="card-row"><span>' + esc(u.display_name || u.phone) + '</span><b>' + money(u.deposits_ghs) + ' deposited</b></div>').join('');
-  return '<div class="card"><h3>Refer &amp; Earn</h3>' +
-    '<p class="muted">Share your link — anyone who registers through it is yours, and you earn commission on their deposits.</p>' +
-    '<div class="mannum" style="font-size:13px; letter-spacing:0; word-break:break-all">' + esc(link) + '</div>' +
-    '<button class="btn gold" data-copy="' + esc(link) + '">Copy Link</button>' +
-    '<div class="card-row"><span>People referred</span><b>' + (d.invited_users || []).length + '</b></div>' +
-    '<div class="card-row"><span>Earned so far</span><b>' + money(c.earned_ghs || 0) + '</b></div>' +
-    '<div class="card-row"><span>Pending payout</span><b>' + money(c.pending_ghs || 0) + '</b></div>' +
-    (list || '<p class="empty">Nobody yet — share your link to start earning.</p>') + '</div>';
-}
-async function loadReferrals() {
-  try {
-    state.referrals = await api('/auth/referrals');
-    if (state.view === 'profile') render();
-  } catch (e) { /* profile still renders without the block data */ }
+// Referral links are an admin-tier tool only (Prince's rule,
+// 2026-11-03): players no longer see a Refer & Earn block — the
+// link, the referred list and the earnings live in the admin and
+// super admin portals (My Earnings) for admin accounts only.
+// Shrink a picked screenshot to a modest JPEG data URL so it can
+// ride along with the manual-deposit confirmation (stored on the
+// transaction row; the reviewing admin opens it from the queue).
+function shrinkImage(file) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, 1280 / Math.max(img.width || 1, img.height || 1));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.width * scale));
+      c.height = Math.max(1, Math.round(img.height * scale));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
 }
 function betCardHTML(b) {
   const legs = (b.selections || []).map(l =>
@@ -538,6 +537,7 @@ function walletHTML() {
       '<label>Amount sent (GHS) <input type="number" id="mdAmt" min="1" value="50" required></label>' +
       '<label>Your MoMo number <input type="tel" id="mdPhone" placeholder="05X XXX XXXX" required></label>' +
       '<label>Transaction ID / reference <input type="text" id="mdRef" placeholder="e.g. 12345678901" required></label>' +
+      '<label>Screenshot of the transaction (optional) <input type="file" id="mdProof" accept="image/*"></label>' +
       '<button class="btn gold big" type="submit">I Have Sent It — Confirm Deposit</button></form></div>'
     : momoPanelHTML();
   // Deposit, Withdraw and History are separate views inside the wallet.
@@ -791,7 +791,6 @@ document.addEventListener('click', e => {
     render();
     if (state.view === 'bets') loadBets();
     if (state.view === 'wallet') loadWallet();
-    if (state.view === 'profile') loadReferrals();
     if (state.view === 'support') loadSupport();
     return;
   }
@@ -961,10 +960,13 @@ document.addEventListener('submit', async e => {
   } else if (id === 'manualDepForm') {
     e.preventDefault();
     try {
-      await api('/wallet/deposit-manual', {
-        method: 'POST',
-        body: { amount_ghs: parseFloat($('#mdAmt').value) || 0, sender_phone: $('#mdPhone').value.trim(), external_ref: $('#mdRef').value.trim() }
-      });
+      const body = { amount_ghs: parseFloat($('#mdAmt').value) || 0, sender_phone: $('#mdPhone').value.trim(), external_ref: $('#mdRef').value.trim() };
+      const pf = $('#mdProof');
+      if (pf && pf.files && pf.files[0]) {
+        const proof = await shrinkImage(pf.files[0]);
+        if (proof) body.proof_image = proof;
+      }
+      await api('/wallet/deposit-manual', { method: 'POST', body });
       toast('Deposit confirmation received — your balance is credited once the payment is confirmed.');
       loadWallet();
     } catch (err) { errToast(err, 'Deposit confirmation failed.'); }
@@ -1112,7 +1114,6 @@ $('#authForm').addEventListener('submit', async e => {
     render();
     if (state.view === 'wallet') loadWallet();
     if (state.view === 'bets') loadBets();
-    if (state.view === 'profile') loadReferrals();
   } catch (err) {
     errToast(err, 'Something went wrong.');
   } finally {

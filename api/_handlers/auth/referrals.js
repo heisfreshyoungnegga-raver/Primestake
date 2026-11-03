@@ -1,13 +1,18 @@
 const { sql, send, guard, requireAuth, ensureAdminTables, ensureInviteCode } = require('../../_lib');
 
-// Any logged-in account: its permanent referral link, the users it
-// brought in, and its referral earnings (earned / paid / pending).
-// Referral commission lands in the same ledger admins use; the super
-// admin pays it out from the admin dashboard.
+// Admin-tier accounts only: the account's permanent referral link,
+// the users it brought in, and its referral earnings (earned / paid /
+// pending). Referral commission lands in the same ledger admins use;
+// the super admin pays it out from the admin dashboard.
 module.exports = guard(async (req, res) => {
   const auth = requireAuth(req, res);
   if (!auth) return;
   await ensureAdminTables();
+  // Referral links are admin-tier only (Prince's rule, 2026-11-03):
+  // players do not get a link, a referred list or earnings here.
+  const me = await sql('select role from users where id = $1', [auth.uid]);
+  if (!me.length) return send(res, 404, { error: 'account_not_found' });
+  if (me[0].role === 'player') return send(res, 403, { error: 'referrals_admin_only', detail: 'Referral links are for admin accounts only.' });
   const code = await ensureInviteCode(auth.uid);
   if (!code) return send(res, 404, { error: 'account_not_found' });
   const [invited, totals] = await Promise.all([

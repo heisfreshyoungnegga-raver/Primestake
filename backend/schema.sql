@@ -89,8 +89,11 @@ create table if not exists wallet_transactions (
   note text,
   confirmed_by uuid references users (id),
   created_at timestamptz not null default now(),
-  confirmed_at timestamptz
+  confirmed_at timestamptz,
+  proof_image text
 );
+-- Manual-deposit transaction screenshots (added 2026-11-03).
+alter table wallet_transactions add column if not exists proof_image text;
 create index if not exists wallet_user_idx on wallet_transactions (user_id, created_at desc);
 create index if not exists wallet_status_idx on wallet_transactions (status, kind);
 
@@ -209,7 +212,7 @@ on conflict (key) do nothing;
 -- What the admin payout queue screen reads.
 create or replace view admin_pending_queue as
   select wt.id, wt.user_id, u.phone, wt.kind, wt.method, wt.amount_ghs,
-         wt.external_ref, wt.created_at
+         wt.external_ref, wt.created_at, (wt.proof_image is not null) as has_proof
   from wallet_transactions wt
   join users u on u.id = wt.user_id
   where wt.status = 'pending' and wt.kind in ('deposit', 'withdrawal')

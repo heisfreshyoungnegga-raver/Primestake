@@ -340,7 +340,7 @@ async function applyDepositRewards(userId, txnId, amountGhs) {
   if (commPct > 0) {
     const inv = await sql(
       `select i.id from users u join users i on i.id = u.invited_by
-       where u.id = $1 and i.status = 'active'`,
+       where u.id = $1 and i.status = 'active' and i.role in ('admin', 'super_admin')`,
       [userId]
     );
     if (inv.length) {
