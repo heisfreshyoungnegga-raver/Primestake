@@ -1,4 +1,4 @@
-const { sql, readBody, send, guard, requireAuth, betCode, keyFor, isCustomMatch, customMatchState } = require('../../_lib');
+const { sql, readBody, send, guard, requireAuth, betCode, keyFor, isCustomMatch, customMatchState, fillOdds } = require('../../_lib');
 
 // Place a bet. Odds are read back from the database (never trusted from
 // the client), and the debit + bet + selections + ledger entry happen in
@@ -30,7 +30,7 @@ module.exports = guard(async (req, res) => {
     if (seenMatches.has(m.id)) return send(res, 400, { error: 'one_selection_per_match' });
     seenMatches.add(m.id);
     const key = keyFor(s.market, s.pick);
-    const odds = key ? Number(m.odds[key]) : NaN;
+    const odds = key ? Number(fillOdds(m.odds)[key]) : NaN;
     if (!key || !(odds > 1)) return send(res, 400, { error: 'market_unavailable' });
     totalOdds *= odds;
     clean.push({ match_id: m.id, market: s.market, pick: s.pick, odds });

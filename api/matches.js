@@ -1,4 +1,4 @@
-const { sql, send, guard, isCustomMatch, customMatchState } = require('./_lib');
+const { sql, send, guard, isCustomMatch, customMatchState, fillOdds } = require('./_lib');
 const { maybeRefreshLive } = require('./_espn');
 
 // Public match list: live matches first, then upcoming by start time.
@@ -27,9 +27,9 @@ module.exports = guard(async (req, res) => {
     if (isCustomMatch(m)) {
       const st = customMatchState(m, now);
       if (st.status === 'finished' && now - new Date(m.starts_at) > (95 + 180) * 60000) continue;
-      out.push({ ...m, status: st.status, minute: st.minute, score_home: st.score_home, score_away: st.score_away, goal_events: undefined });
+      out.push({ ...m, odds: fillOdds(m.odds), status: st.status, minute: st.minute, score_home: st.score_home, score_away: st.score_away, goal_events: undefined });
     } else {
-      out.push({ ...m, goal_events: undefined });
+      out.push({ ...m, odds: fillOdds(m.odds), goal_events: undefined });
     }
   }
   out.sort((a, b) => {

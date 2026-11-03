@@ -419,6 +419,16 @@ function expandOdds(o1, ox, o2) {
   return odds;
 }
 
+// Complete a partial odds book from its 1X2 line: any key the book
+// lacks (totals lines ESPN did not publish, BTTS it never carries)
+// is priced by expandOdds; keys already present are never touched.
+// Deterministic — the match list, the details page and bet
+// placement all see the same completed book.
+function fillOdds(odds) {
+  if (!odds || !(odds.o1 > 1 && odds.ox > 1 && odds.o2 > 1)) return odds || {};
+  return { ...expandOdds(odds.o1, odds.ox, odds.o2), ...odds };
+}
+
 function inviteCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = 'PS';
@@ -442,4 +452,4 @@ async function ensureInviteCode(userId) {
   return null;
 }
 
-module.exports = { sql, hashPassword, verifyPassword, issueToken, readBody, send, requireAuth, requireAdmin, requireSuperAdmin, guard, publicUser, betCode, MARKETS, keyFor, pickWon, shinobiConfig, shinobiFetch, mapIntentStatus, detectNetwork, ensurePaymentTables, ensureAdminTables, getSettings, applyDepositRewards, isCustomMatch, customMatchState, expandOdds, inviteCode, ensureInviteCode };
+module.exports = { sql, hashPassword, verifyPassword, issueToken, readBody, send, requireAuth, requireAdmin, requireSuperAdmin, guard, publicUser, betCode, MARKETS, keyFor, pickWon, shinobiConfig, shinobiFetch, mapIntentStatus, detectNetwork, ensurePaymentTables, ensureAdminTables, getSettings, applyDepositRewards, isCustomMatch, customMatchState, expandOdds, fillOdds, inviteCode, ensureInviteCode };
