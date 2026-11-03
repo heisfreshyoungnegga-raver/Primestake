@@ -1,5 +1,23 @@
-// PrimeStake Admin — separate operator back office. Not linked from the
-// public site. Uses the same API with an admin-role account.
+// PrimeStake back office — TWO separate portals sharing this console:
+//   admin.html        -> the Admin Portal (admin accounts)
+//   super-admin.html  -> the Super Admin Portal (super_admin accounts only)
+// The portal is fixed by the page (window.PS_PORTAL). Super-only powers
+// (Platform Control, role changes, balance edits, invites, featured
+// matches) exist ONLY inside the Super Admin Portal, even for a
+// super_admin who signs in to the Admin Portal. The API also enforces
+// the super_admin role server-side; this split is the operator-facing
+// separation Prince asked for on 2026-11-03.
+const PORTAL = window.PS_PORTAL === 'super' ? 'super' : 'admin';
+const isSuperPortal = PORTAL === 'super';
+function portalAllows(user) {
+  if (!user) return false;
+  return isSuperPortal
+    ? user.role === 'super_admin'
+    : user.role === 'admin' || user.role === 'super_admin';
+}
+function superTools() {
+  return isSuperPortal && !!state.user && state.user.role === 'super_admin';
+}
 const state = {
   token: localStorage.getItem('ps_admin_token') || '',
   user: null,
@@ -43,18 +61,23 @@ function chip(s) {
 }
 
 function loginHTML() {
-  return '<div class="profile"><h2>Admin Login</h2>' +
-    '<p class="modal-sub">Operator accounts only. This page is not linked from the public site.</p>' +
+  return '<div class="profile"><h2>' + (isSuperPortal ? 'Super Admin Login' : 'Admin Login') + '</h2>' +
+    '<p class="modal-sub">' + (isSuperPortal
+      ? 'Super admin accounts only. Platform Control lives here, not in the Admin Portal.'
+      : 'Admin accounts only. This page is not linked from the public site.') + '</p>' +
     '<form id="adminLogin" class="stack">' +
     '<label>Phone number <input type="tel" id="adPhone" required></label>' +
     '<label>Password <input type="password" id="adPass" required></label>' +
     '<button class="btn gold big" type="submit">Login</button></form>' +
     (state.offline ? '<p class="lock-note">Backend not configured yet — set DATABASE_URL and SESSION_SECRET in the Vercel project first.</p>' : '') +
+    '<p class="modal-sub">' + (isSuperPortal
+      ? 'Regular admin? Use the <a href="admin.html">Admin Portal</a>.'
+      : 'Super admin? Use the <a href="super-admin.html">Super Admin Portal</a>.') + '</p>' +
     '</div>';
 }
 function tabsHTML() {
   const tabs = [['dashboard', 'Dashboard'], ['queue', 'Payout Queue'], ['matches', 'Matches'], ['users', 'Users'], ['support', 'Support'], ['earnings', 'My Earnings']];
-  if (state.user && state.user.role === 'super_admin') tabs.push(['control', 'Platform Control']);
+  if (superTools()) tabs.push(['control', 'Platform Control']);
   return '<div class="wtabs">' + tabs.map(([k, label]) =>
     '<button class="' + (state.tab === k ? 'on' : '') + '" data-atab="' + k + '">' + label + '</button>').join('') + '</div>';
 }
@@ -123,9 +146,9 @@ function usersHTML() {
     '<div class="muted">' + esc(u.display_name || '') + ' · joined ' + fmtDate(u.created_at) + ' · ' + u.deposits_completed + ' deposits · ' + u.bets_count + ' bets' + (u.inviter_phone ? ' · invited by ' + esc(u.inviter_phone) : '') + '</div></div>' +
     '<div>' + money(u.balance_ghs) + '</div>' + chip(u.status) +
     '<span class="muted">' + esc(u.role) + '</span>' +
-    '<span>' + (state.user && state.user.role === 'super_admin' ? '<button class="btn ghost sm" data-bal-edit="' + u.id + '">Edit Balance</button> ' : '') +
+    '<span>' + (superTools() ? '<button class="btn ghost sm" data-bal-edit="' + u.id + '">Edit Balance</button> ' : '') +
     '<button class="btn ghost sm" data-block="' + u.id + '" data-to="' + (u.status === 'blocked' ? 'active' : 'blocked') + '">' + (u.status === 'blocked' ? 'Unblock' : 'Block') + '</button>' +
-    (state.user && state.user.role === 'super_admin' && u.id !== state.user.id
+    (superTools() && u.id !== state.user.id
       ? ' <button class="btn ghost sm" data-role="' + u.id + '" data-as="admin">Make Admin</button>' +
         ' <button class="btn ghost sm" data-role="' + u.id + '" data-as="super_admin">Make Super</button>' +
         ' <button class="btn ghost sm" data-role="' + u.id + '" data-as="player">Make Player</button>' +
@@ -154,7 +177,7 @@ function earningsHTML() {
     '<div class="card"><h3>Recent commissions</h3>' + (recent || '<p class="empty">No commissions yet. They land here when an invited user\'s deposit is confirmed.</p>') + '</div>';
 }
 function controlHTML() {
-  if (!state.user || state.user.role !== 'super_admin') return tabsHTML() + '<div class="card"><p class="muted">Super admin only.</p></div>';
+  if (!superTools()) return tabsHTML() + '<div class="card"><p class="muted">Platform Control lives in the <a href="super-admin.html">Super Admin Portal</a>.</p></div>';
   const s = state.settings || {};
   const on = (v) => v === '1';
   const pending = state.users.filter(u => u.role === 'admin' && u.status === 'pending');
@@ -198,7 +221,7 @@ function controlHTML() {
     '<div class="card"><h3>Referral commissions</h3>' + (commRows || '<p class="empty">No referral earnings yet.</p>') + '</div>';
 }
 function featuredFormHTML() {
-  if (!state.user || state.user.role !== 'super_admin') return '';
+  if (!superTools()) return '';
   return '<div class="card"><h3>Create a featured match (super admin)</h3>' +
     '<p class="muted">Your own game: it goes live by itself at kickoff, the clock and score run from your goal schedule, and it settles on the final scheduled score. Double Chance, Over/Under and BTTS prices are built from your 1X2 line.</p>' +
     '<form id="featForm" class="stack">' +
@@ -229,6 +252,9 @@ function render() {
     return;
   }
   head.innerHTML = '<span class="userchip">' + esc(state.user.phone) + '</span> ' +
+    (isSuperPortal
+      ? '<a class="btn ghost" href="admin.html">Admin Portal</a> '
+      : (state.user.role === 'super_admin' ? '<a class="btn ghost" href="super-admin.html">Super Portal</a> ' : '')) +
     '<button class="btn ghost" id="adminLogout">Logout</button>';
   $('#adminLogout').addEventListener('click', () => {
     state.user = null; state.token = '';
@@ -249,7 +275,7 @@ async function loadAll() {
       api('/admin/stats'), api('/admin/queue'), api('/admin/matches'), api('/admin/users'), api('/admin/support'),
       api('/admin/settings').catch(() => null), api('/admin/my-dashboard').catch(() => null)
     ];
-    if (state.user && state.user.role === 'super_admin') jobs.push(api('/admin/invite-admin').catch(() => null));
+    if (superTools()) jobs.push(api('/admin/invite-admin').catch(() => null));
     const [stats, queue, matches, users, support, settings, myDash, invites] = await Promise.all(jobs);
     state.stats = stats.stats; state.queue = queue.queue; state.matches = matches.matches;
     state.users = users.users; state.support = support.messages;
@@ -414,7 +440,12 @@ document.addEventListener('submit', async e => {
     e.preventDefault();
     try {
       const data = await api('/auth/login', { method: 'POST', body: { phone: $('#adPhone').value.trim(), password: $('#adPass').value } });
-      if (data.user.role !== 'admin' && data.user.role !== 'super_admin') { toast('That account is not an admin account.'); return; }
+      if (!portalAllows(data.user)) {
+        toast(isSuperPortal
+          ? 'That account is not a super admin account — use the Admin Portal instead.'
+          : 'That account is not an admin account.');
+        return;
+      }
       state.token = data.token;
       localStorage.setItem('ps_admin_token', data.token);
       state.user = data.user;
@@ -496,7 +527,10 @@ document.addEventListener('submit', async e => {
   if (state.token) {
     try {
       const data = await api('/auth/me');
-      if (data.user.role === 'admin' || data.user.role === 'super_admin') { state.user = data.user; loadAll(); return; }
+      if (portalAllows(data.user)) { state.user = data.user; loadAll(); return; }
+      // Valid admin-tier session, wrong portal for this account: keep the
+      // token (it belongs to the other portal) and just show this login.
+      if (data.user.role === 'admin' || data.user.role === 'super_admin') { render(); return; }
     } catch (e) { /* fall through to login */ }
     state.token = '';
     localStorage.removeItem('ps_admin_token');
