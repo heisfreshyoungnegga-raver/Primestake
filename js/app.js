@@ -8,6 +8,7 @@ const state = {
   league: 'All',
   market: '1X2',
   date: 'All',
+  sport: 'Soccer',
   query: '',
   slip: new Map(), // key -> {matchId, matchLabel, league, market, pick, odd}
   user: null,
@@ -198,6 +199,11 @@ function matchListHTML() {
     return '<div class="card"><h3>Matches are on their way</h3><p class="muted">The PrimeStake service is being set up right now. Fixtures and odds will appear here as soon as the backend goes live.</p></div>';
   }
   if (!state.matchesLoaded) return '<div class="skel"><i></i><i></i><i></i><i></i></div>';
+  if (state.sport === 'Basketball') {
+    return '<div class="card"><h3>Basketball is coming soon</h3>' +
+      '<p class="muted">Basketball markets are not live yet. Soccer is open now with full markets on every match.</p>' +
+      '<button class="btn gold" data-quick="Soccer">See soccer matches</button></div>';
+  }
   const all = state.matches.filter(matchVisible);
   let html = '<p class="count">EVENTS &amp; MARKETS — <b>' + all.length + ' Matches Found</b></p>';
   html += groupHTML('LIVE MATCHES', all.filter(m => m.status === 'live'), true);
@@ -252,9 +258,31 @@ function filtersHTML() {
     row('When', 'date', DATES, state.date) +
     '</section>';
 }
+// Home quick-access tiles (the icon row under the hero): each tile is a
+// shortcut into a real view or filter. Icons are small inline SVGs drawn
+// for PrimeStake; the Aviator tile carries the same HOT tag as Games.
+const QICONS = {
+  'Soccer': '<svg viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="1.7" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7l3 2.2-1.1 3.6h-3.8L9 9.2 12 7z" fill="#141414" stroke="none"/><path d="M12 3v4M18.6 6.4L15 9.2M20.1 14.6l-4.7-1.3M15.4 20.2l-1.5-4.4M8.6 20.2l1.5-4.4M3.9 14.6l4.7-1.3M5.4 6.4L9 9.2"/></svg>',
+  'Today': '<svg viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="1.7" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle cx="12" cy="15.5" r="1.4" fill="#141414" stroke="none"/></svg>',
+  'Aviator': '<svg viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="1.7" stroke-linejoin="round"><path d="M21 3L10.6 13.4M21 3l-6.6 18-3.8-7.6L3 9.6 21 3z"/></svg>',
+  'Basketball': '<svg viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M3.2 12h17.6M12 3.2v17.6M5.6 5.6c3.4 3.6 3.4 9.2 0 12.8M18.4 5.6c-3.4 3.6-3.4 9.2 0 12.8"/></svg>',
+  'Verify Bet': '<svg viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 2.5V11c0 4.6-3 7.7-7 9.5C8 18.7 5 15.6 5 11V5.5L12 3z"/><path d="M9 11.6l2.2 2.2 4.3-4.3"/></svg>',
+  'Booking Code': '<svg viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h13A1.5 1.5 0 0 1 20 8.5V10a2.5 2.5 0 0 0 0 5v1.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 16.5V15a2.5 2.5 0 0 0 0-5V8.5z"/><path d="M13.5 8v1.6M13.5 11.2v1.6M13.5 14.4V16"/></svg>',
+};
 function quickHTML() {
-  const q = ['Soccer', 'Today', 'Games', 'Verify Bet', 'Booking Codes', 'All'];
-  return '<div class="quickrow">' + q.map(x => '<button class="quick" data-quick="' + x + '">' + x + '</button>').join('') + '</div>';
+  const tiles = [
+    ['Soccer', ''],
+    ['Today', ''],
+    ['Aviator', 'hot'],
+    ['Basketball', ''],
+    ['Verify Bet', ''],
+    ['Booking Code', ''],
+  ];
+  return '<div class="quickrow">' + tiles.map(([label, cls]) =>
+    '<button class="qtile' + (cls ? ' ' + cls : '') + '" data-quick="' + label + '">' +
+    (cls === 'hot' ? '<span class="qhot">HOT</span>' : '') +
+    '<span class="qicon">' + QICONS[label] + '</span><span>' + label + '</span></button>'
+  ).join('') + '</div>';
 }
 function promoStripHTML() {
   const p = PROMOS[0];
@@ -571,7 +599,7 @@ function viewHTML() {
     case 'virtual':
       return filtersHTML() + matchListHTML();
     default:
-      return heroHTML() + promoStripHTML() + trustStripHTML() + quickHTML() + filtersHTML() + matchListHTML();
+      return heroHTML() + quickHTML() + promoStripHTML() + trustStripHTML() + filtersHTML() + matchListHTML();
   }
 }
 function render() {
@@ -690,6 +718,9 @@ document.addEventListener('click', e => {
   if (nav) { closeMenu();
     e.preventDefault();
     state.view = nav.dataset.nav;
+    // Top-nav sections always open on the default soccer book; the
+    // Basketball tile is the only way into the basketball placeholder.
+    if (['home', 'live', 'sports', 'virtual'].includes(state.view)) state.sport = 'Soccer';
     render();
     if (state.view === 'bets') loadBets();
     if (state.view === 'wallet') loadWallet();
@@ -734,12 +765,12 @@ document.addEventListener('click', e => {
   const quick = e.target.closest('[data-quick]');
   if (quick) {
     const q = quick.dataset.quick;
-    if (q === 'Soccer') { state.view = 'sports'; render(); }
-    else if (q === 'Today') { state.view = 'home'; state.date = 'Today'; render(); }
-    else if (q === 'All') { state.view = 'home'; state.league = 'All'; state.date = 'All'; state.query = ''; render(); }
-    else if (q === 'Games') { state.view = 'games'; render(); }
+    if (q === 'Soccer') { state.sport = 'Soccer'; state.view = 'sports'; render(); }
+    else if (q === 'Today') { state.sport = 'Soccer'; state.view = 'home'; state.date = 'Today'; render(); }
+    else if (q === 'Aviator') { state.view = 'games'; render(); }
+    else if (q === 'Basketball') { state.sport = 'Basketball'; state.view = 'sports'; render(); }
     else if (q === 'Verify Bet') { state.view = 'verify'; render(); }
-    else if (q === 'Booking Codes') { state.view = 'booking'; render(); }
+    else if (q === 'Booking Code') { state.view = 'booking'; render(); }
     return;
   }
   const game = e.target.closest('[data-game]');

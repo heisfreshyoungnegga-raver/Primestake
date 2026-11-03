@@ -133,14 +133,48 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 .hero-dots i.on { background: var(--accent); }
 .hero-count { position: absolute; right: 18px; top: 12px; color: var(--header-ink); font-size: 12px; opacity: 0.85; }
 
-/* quick actions */
-.quickrow { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0 4px; }
-.quick {
+/* quick actions: icon tile row under the hero */
+.quickrow { display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0 4px; }
+.qtile {
+  position: relative;
+  flex: 0 0 auto;
+  width: 88px;
+  padding: 12px 6px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
   border: 1px solid var(--line);
-  background: var(--chip-bg);
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: 12.5px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.qtile:active { transform: scale(0.97); }
+.qtile .qicon {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: #fdf3d7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.qtile .qicon svg { width: 26px; height: 26px; display: block; }
+.qtile.hot .qicon { background: #fde3e3; }
+.qtile .qhot {
+  position: absolute;
+  top: -7px;
+  right: -4px;
+  background: var(--live);
+  color: var(--live-ink);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  padding: 2px 7px;
   border-radius: 999px;
-  padding: 7px 14px;
-  font-weight: 600;
 }
 
 /* ticker */
@@ -712,7 +746,7 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   .mteams .team { font-size: 13.5px; }
   .quickrow { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; }
   .quickrow::-webkit-scrollbar { display: none; }
-  .quick { flex: 0 0 auto; }
+  .qtile { flex: 0 0 auto; }
   .truststrip { grid-template-columns: repeat(2, 1fr); }
   .ticker { font-size: 12.5px; }
 }
