@@ -9,6 +9,7 @@ module.exports = guard(async (req, res) => {
     return send(res, 401, { error: 'wrong_phone_or_password' });
   }
   if (rows[0].status === 'blocked') return send(res, 403, { error: 'account_blocked' });
+  if (rows[0].status === 'pending') return send(res, 403, { error: 'account_pending', detail: 'Your admin account is waiting for verification by the super admin.' });
   const user = publicUser(rows[0]);
   send(res, 200, { user, token: issueToken(rows[0]) });
 });

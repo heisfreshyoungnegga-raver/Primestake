@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { sql, readBody, send, guard, requireAuth, shinobiConfig, shinobiFetch, mapIntentStatus, detectNetwork, ensurePaymentTables } = require('../../_lib');
+const { sql, readBody, send, guard, requireAuth, shinobiConfig, shinobiFetch, mapIntentStatus, detectNetwork, ensurePaymentTables, ensureAdminTables, getSettings } = require('../../_lib');
 
 // Instant MoMo deposit (ShinobiPay direct push): create a payment intent,
 // ShinobiPay pushes the approval prompt to the customer's phone. This
@@ -13,6 +13,9 @@ module.exports = guard(async (req, res) => {
   const auth = requireAuth(req, res);
   if (!auth) return;
   if (!shinobiConfig().secretKey) return send(res, 503, { error: 'provider_not_configured' });
+  await ensureAdminTables();
+  const settings = await getSettings(['gateway_enabled']);
+  if (settings.gateway_enabled === '0') return send(res, 503, { error: 'gateway_disabled', detail: 'Instant deposits are switched off right now. Please use Manual transfer.' });
 
   const { amount_ghs, phone, network } = await readBody(req);
   const amount = Number(amount_ghs);

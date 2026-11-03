@@ -14,7 +14,7 @@
 //     ShinobiPay keeps retrying instead of us processing unverified
 //     events.
 const crypto = require('crypto');
-const { sql, send, shinobiConfig, shinobiFetch, ensurePaymentTables } = require('../_lib');
+const { sql, send, shinobiConfig, shinobiFetch, ensurePaymentTables, ensureAdminTables, applyDepositRewards } = require('../_lib');
 
 // Vercel: keep the raw body stream intact for signature verification.
 module.exports.config = { api: { bodyParser: false } };
@@ -103,9 +103,13 @@ module.exports = async (req, res) => {
            update users set balance_ghs = balance_ghs + (select amount_ghs from a)
            where id = (select user_id from a) returning id
          )
-         select (select count(*) from a) as settled`,
+         select (select count(*) from a) as settled, (select id from ins) as txn_id`,
         [attempt.id]
       );
+      if (Number(out[0].settled) === 1 && out[0].txn_id) {
+        await ensureAdminTables();
+        await applyDepositRewards(attempt.user_id, out[0].txn_id, Number(attempt.amount_ghs));
+      }
       return send(res, 200, { ok: true, credited: Number(out[0].settled) === 1 });
     }
 

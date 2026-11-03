@@ -1,4 +1,4 @@
-const { sql, readBody, send, guard, requireAuth, betCode, keyFor } = require('../../_lib');
+const { sql, readBody, send, guard, requireAuth, betCode, keyFor, isCustomMatch, customMatchState } = require('../../_lib');
 
 // Place a bet. Odds are read back from the database (never trusted from
 // the client), and the debit + bet + selections + ledger entry happen in
@@ -14,7 +14,7 @@ module.exports = guard(async (req, res) => {
   if (!(stake > 0)) return send(res, 400, { error: 'invalid_stake' });
 
   const ids = [...new Set(selections.map(s => String(s.match_id)))];
-  const matchRows = await sql('select id, status, odds from matches where id = any($1::uuid[])', [ids]);
+  const matchRows = await sql('select id, status, odds, starts_at, external_ref, goal_events, score_home, score_away from matches where id = any($1::uuid[])', [ids]);
   const byId = new Map(matchRows.map(m => [m.id, m]));
 
   let totalOdds = 1;
@@ -24,6 +24,9 @@ module.exports = guard(async (req, res) => {
     const m = byId.get(String(s.match_id));
     if (!m) return send(res, 400, { error: 'match_not_found' });
     if (m.status === 'finished') return send(res, 400, { error: 'match_finished' });
+    // Featured matches finish by the clock even while their stored
+    // status still says upcoming — never sell a bet on a finished one.
+    if (isCustomMatch(m) && customMatchState(m).status === 'finished') return send(res, 400, { error: 'match_finished' });
     if (seenMatches.has(m.id)) return send(res, 400, { error: 'one_selection_per_match' });
     seenMatches.add(m.id);
     const key = keyFor(s.market, s.pick);

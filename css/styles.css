@@ -109,7 +109,7 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   min-height: 240px;
   display: flex;
   align-items: flex-end;
-  background: var(--header-bg);
+  background: linear-gradient(120deg, #14161f 0%, #23263a 55%, #3a2f10 100%);
 }
 .hero img.bg {
   position: absolute;
@@ -510,6 +510,13 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   .odds { grid-column: 1 / -1; }
   .hero h1 { font-size: 26px; }
   .logo { font-size: 17px; }
+  .wtabs { flex-wrap: wrap; }
+  .wtabs button { flex: 1 1 30%; padding: 10px 6px; font-size: 13.5px; }
+  .oddsgrid { grid-template-columns: 1fr 1fr; }
+  .mannum { font-size: 24px; }
+  .bal { font-size: 26px; }
+  .txrow { gap: 6px; }
+  .txrow .btn { margin-top: 2px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

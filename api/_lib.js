@@ -248,4 +248,182 @@ function ensurePaymentTables() {
   return tablesReady;
 }
 
-module.exports = { sql, hashPassword, verifyPassword, issueToken, readBody, send, requireAuth, requireAdmin, requireSuperAdmin, guard, publicUser, betCode, MARKETS, keyFor, pickWon, shinobiConfig, shinobiFetch, mapIntentStatus, detectNetwork, ensurePaymentTables };
+// ---- Admin platform: invites, commissions, settings, custom matches --
+// Lazy self-migration (same pattern as the payment tables): invite
+// attribution columns on users, one-time admin invite tokens, the
+// commission ledger, goal schedules on matches, and the operator
+// settings the super-admin dashboard controls.
+let adminTablesReady = null;
+function ensureAdminTables() {
+  if (!adminTablesReady) {
+    adminTablesReady = (async () => {
+      await sql(`alter table users add column if not exists invite_code text`);
+      await sql(`create unique index if not exists users_invite_code_idx on users (invite_code) where invite_code is not null`);
+      await sql(`alter table users add column if not exists invited_by uuid references users (id)`);
+      // Widen the status check so invited admins can sit in 'pending'
+      // until the super admin verifies them.
+      await sql(`do $$ declare c text; begin
+        select conname into c from pg_constraint
+        where conrelid = 'users'::regclass and contype = 'c' and pg_get_constraintdef(oid) like '%status%';
+        if c is not null then execute 'alter table users drop constraint ' || quote_ident(c); end if;
+        alter table users add constraint users_status_check check (status in ('active', 'blocked', 'pending'));
+      end $$`);
+      await sql(`create table if not exists invites (
+        id uuid primary key default gen_random_uuid(),
+        token text not null unique,
+        kind text not null default 'admin',
+        created_by uuid references users (id),
+        expires_at timestamptz not null,
+        used_by uuid references users (id),
+        used_at timestamptz,
+        created_at timestamptz not null default now()
+      )`);
+      await sql(`create table if not exists commissions (
+        id uuid primary key default gen_random_uuid(),
+        earner_id uuid not null references users (id),
+        source_user_id uuid not null references users (id),
+        source_txn_id uuid references wallet_transactions (id),
+        basis_ghs numeric(12, 2) not null,
+        pct numeric(6, 2) not null,
+        amount_ghs numeric(12, 2) not null,
+        paid_at timestamptz,
+        created_at timestamptz not null default now()
+      )`);
+      await sql(`create unique index if not exists commissions_source_idx on commissions (source_txn_id) where source_txn_id is not null`);
+      await sql(`alter table matches add column if not exists goal_events jsonb not null default '[]'::jsonb`);
+      await sql(`insert into operator_settings (key, value) values
+        ('gateway_enabled', '1'), ('payouts_frozen', '0'),
+        ('admin_commission_pct', '0'), ('user_cashback_pct', '0')
+        on conflict (key) do nothing`);
+    })().catch(e => { adminTablesReady = null; throw e; });
+  }
+  return adminTablesReady;
+}
+
+async function getSettings(keys) {
+  const rows = await sql('select key, value from operator_settings where key = any($1::text[])', [keys]);
+  const out = {};
+  rows.forEach(r => { out[r.key] = r.value; });
+  return out;
+}
+
+// Rewards that hang off a completed deposit, run once per deposit txn:
+//  - user cashback: user_cashback_pct of the deposit, credited straight
+//    back to the depositor's balance as an adjustment ledger row.
+//  - admin commission: admin_commission_pct of the deposit, recorded in
+//    the commission ledger for whoever invited the depositor (admins
+//    only), to be paid out later from the super-admin dashboard.
+// Idempotent per source txn, so a retried call can never double-pay.
+async function applyDepositRewards(userId, txnId, amountGhs) {
+  const amount = Number(amountGhs);
+  if (!(amount > 0)) return;
+  const s = await getSettings(['admin_commission_pct', 'user_cashback_pct']);
+  const cashPct = Number(s.user_cashback_pct || 0);
+  const commPct = Number(s.admin_commission_pct || 0);
+  if (cashPct > 0) {
+    const cash = Math.round(amount * cashPct) / 100;
+    if (cash > 0) {
+      const dupe = await sql('select id from wallet_transactions where external_ref = $1', ['cashback:' + txnId]);
+      if (!dupe.length) {
+        await sql(
+          `with ins as (
+             insert into wallet_transactions (user_id, kind, method, amount_ghs, status, external_ref, note)
+             values ($1, 'adjustment', 'Deposit cashback', $2, 'completed', $3, $4) returning id
+           )
+           update users set balance_ghs = balance_ghs + $2 where id = $1`,
+          [userId, cash, 'cashback:' + txnId, cashPct + '% cashback on deposit']
+        );
+      }
+    }
+  }
+  if (commPct > 0) {
+    const inv = await sql(
+      `select i.id from users u join users i on i.id = u.invited_by
+       where u.id = $1 and i.role in ('admin', 'super_admin') and i.status = 'active'`,
+      [userId]
+    );
+    if (inv.length) {
+      const earn = Math.round(amount * commPct) / 100;
+      if (earn > 0) {
+        await sql(
+          `insert into commissions (earner_id, source_user_id, source_txn_id, basis_ghs, pct, amount_ghs)
+           values ($1, $2, $3, $4, $5, $6) on conflict (source_txn_id) where source_txn_id is not null do nothing`,
+          [inv[0].id, userId, txnId, amount, commPct, earn]
+        );
+      }
+    }
+  }
+}
+
+// A super-admin "featured" match carries a goal schedule. Its displayed
+// state is derived from the clock: before kickoff it is upcoming; from
+// kickoff the minute counts up and each scheduled goal lands at its
+// minute; at 95 minutes it is finished with the full scheduled score.
+function isCustomMatch(m) {
+  return m && typeof m.external_ref === 'string' && m.external_ref.startsWith('custom:');
+}
+function customMatchState(m, now = new Date()) {
+  const goals = Array.isArray(m.goal_events) ? m.goal_events : [];
+  const finH = goals.filter(g => g.side === 'home').length;
+  const finA = goals.filter(g => g.side === 'away').length;
+  if (m.status === 'finished') return { status: 'finished', minute: null, score_home: m.score_home, score_away: m.score_away, final_home: m.score_home, final_away: m.score_away };
+  const elapsed = Math.floor((now - new Date(m.starts_at)) / 60000);
+  if (elapsed < 0) return { status: 'upcoming', minute: null, score_home: 0, score_away: 0, final_home: finH, final_away: finA };
+  if (elapsed >= 95) return { status: 'finished', minute: null, score_home: finH, score_away: finA, final_home: finH, final_away: finA };
+  const shown = goals.filter(g => Number(g.minute) <= elapsed);
+  return {
+    status: 'live', minute: Math.min(elapsed, 90),
+    score_home: shown.filter(g => g.side === 'home').length,
+    score_away: shown.filter(g => g.side === 'away').length,
+    final_home: finH, final_away: finA
+  };
+}
+
+// Build a full odds book from a 1X2 line for a custom match: Double
+// Chance from the 1X2 prices (same maths as the ESPN sync), the
+// Over/Under ladder and BTTS from a Poisson goal model whose total is
+// split between the teams by their implied win strengths.
+function poissonCdf(k, mu) {
+  let term = Math.exp(-mu), sum = term;
+  for (let i = 1; i <= k; i++) { term *= mu / i; sum += term; }
+  return sum;
+}
+function expandOdds(o1, ox, o2) {
+  const odds = {};
+  if (!(o1 > 1 && ox > 1 && o2 > 1)) return odds;
+  odds.o1 = o1; odds.ox = ox; odds.o2 = o2;
+  odds.dc1x = Math.round((o1 * ox) / (o1 + ox) * 100) / 100;
+  odds.dc12 = Math.round((o1 * o2) / (o1 + o2) * 100) / 100;
+  odds.dcx2 = Math.round((ox * o2) / (ox + o2) * 100) / 100;
+  const raw = [1 / o1, 1 / ox, 1 / o2];
+  const margin = raw[0] + raw[1] + raw[2];
+  const pH = raw[0] / margin, pA = raw[2] / margin;
+  const mu = 2.7;
+  const muH = mu * (pH / (pH + pA || 1)) || mu / 2;
+  const muA = Math.max(mu - muH, 0.15);
+  const pHomeScores = 1 - Math.exp(-muH), pAwayScores = 1 - Math.exp(-muA);
+  const fair = (p) => (p > 0.02 && p < 0.98) ? Math.round((1 / p) / (margin > 1 ? 1.05 : 1) * 100) / 100 : null;
+  [0.5, 1.5, 2.5, 3.5, 4.5].forEach(line => {
+    const suffix = String(line).replace('.', '');
+    const pOver = 1 - poissonCdf(Math.floor(line), mu);
+    const o = fair(pOver), u = fair(1 - pOver);
+    if (o && o > 1.01) odds['over' + suffix] = o;
+    if (u && u > 1.01) odds['under' + suffix] = u;
+  });
+  const gg = fair(pHomeScores * pAwayScores);
+  const ng = fair(1 - pHomeScores * pAwayScores);
+  if (gg && gg > 1.01) odds.gg = gg;
+  if (ng && ng > 1.01) odds.ng = ng;
+  Object.keys(odds).forEach(k => { if (!(odds[k] > 1)) delete odds[k]; });
+  return odds;
+}
+
+function inviteCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = 'PS';
+  const buf = require('crypto').randomBytes(8);
+  for (let i = 0; i < 8; i++) code += chars[buf[i] % chars.length];
+  return code;
+}
+
+module.exports = { sql, hashPassword, verifyPassword, issueToken, readBody, send, requireAuth, requireAdmin, requireSuperAdmin, guard, publicUser, betCode, MARKETS, keyFor, pickWon, shinobiConfig, shinobiFetch, mapIntentStatus, detectNetwork, ensurePaymentTables, ensureAdminTables, getSettings, applyDepositRewards, isCustomMatch, customMatchState, expandOdds, inviteCode };

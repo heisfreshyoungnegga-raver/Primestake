@@ -5,6 +5,7 @@ const state = {
   user: null,
   tab: 'dashboard',
   stats: null, queue: [], matches: [], users: [], support: [],
+  settings: null, myDash: null, invites: [], lastInvite: '',
   offline: false,
 };
 const $ = (s, r = document) => r.querySelector(s);
@@ -52,10 +53,12 @@ function loginHTML() {
     '</div>';
 }
 function tabsHTML() {
-  const tabs = [['dashboard', 'Dashboard'], ['queue', 'Payout Queue'], ['matches', 'Matches'], ['users', 'Users'], ['support', 'Support']];
+  const tabs = [['dashboard', 'Dashboard'], ['queue', 'Payout Queue'], ['matches', 'Matches'], ['users', 'Users'], ['support', 'Support'], ['earnings', 'My Earnings']];
+  if (state.user && state.user.role === 'super_admin') tabs.push(['control', 'Platform Control']);
   return '<div class="wtabs">' + tabs.map(([k, label]) =>
     '<button class="' + (state.tab === k ? 'on' : '') + '" data-atab="' + k + '">' + label + '</button>').join('') + '</div>';
 }
+function siteLink(path) { return location.origin + path; }
 const ESPN_LEAGUES = [
   ['eng.1', 'Premier League'], ['esp.1', 'La Liga'], ['ita.1', 'Serie A'],
   ['ger.1', 'Bundesliga'], ['fra.1', 'Ligue 1'], ['por.1', 'Primeira Liga'],
@@ -105,28 +108,109 @@ function matchesHTML() {
     '</div><button class="btn gold big" type="submit">Add Match</button></form></div>';
   const rows = state.matches.map(m =>
     '<div class="txrow"><div><b>' + esc(m.home_team) + ' vs ' + esc(m.away_team) + '</b>' +
-    '<div class="muted">' + (m.external_ref && String(m.external_ref).indexOf('espn:') === 0 ? 'ESPN · ' : 'Manual · ') + esc(m.league) + ' · ' + fmtDate(m.starts_at) + ' · ' + m.score_home + '-' + m.score_away + (m.minute != null ? ' · ' + m.minute + "'" : '') + '</div></div>' +
+    '<div class="muted">' + (m.external_ref && String(m.external_ref).indexOf('espn:') === 0 ? 'ESPN · ' : m.external_ref && String(m.external_ref).indexOf('custom:') === 0 ? 'Featured · ' : 'Manual · ') + esc(m.league) + ' · ' + fmtDate(m.starts_at) + ' · ' + m.score_home + '-' + m.score_away + (m.minute != null ? ' · ' + m.minute + "'" : '') + '</div></div>' +
     chip(m.status) +
     '<span>' +
     (m.status === 'upcoming' ? '<button class="btn gold sm" data-golive="' + m.id + '">Go Live</button> ' : '') +
     (m.status === 'live' ? '<button class="btn ghost sm" data-score="' + m.id + '">Update Score</button> ' : '') +
     (m.status !== 'finished' ? '<button class="btn ghost sm" data-settle="' + m.id + '">Settle</button>' : '') +
     '</span></div>').join('');
-  return tabsHTML() + form + '<div class="card"><h3>Matches</h3>' + (rows || '<p class="empty">No matches yet.</p>') + '</div>';
+  return tabsHTML() + featuredFormHTML() + form + '<div class="card"><h3>Matches</h3>' + (rows || '<p class="empty">No matches yet.</p>') + '</div>';
 }
 function usersHTML() {
   const rows = state.users.map(u =>
     '<div class="txrow"><div><b>' + esc(u.phone) + '</b>' +
-    '<div class="muted">' + esc(u.display_name || '') + ' · joined ' + fmtDate(u.created_at) + ' · ' + u.deposits_completed + ' deposits · ' + u.bets_count + ' bets</div></div>' +
+    '<div class="muted">' + esc(u.display_name || '') + ' · joined ' + fmtDate(u.created_at) + ' · ' + u.deposits_completed + ' deposits · ' + u.bets_count + ' bets' + (u.inviter_phone ? ' · invited by ' + esc(u.inviter_phone) : '') + '</div></div>' +
     '<div>' + money(u.balance_ghs) + '</div>' + chip(u.status) +
     '<span class="muted">' + esc(u.role) + '</span>' +
-    '<span><button class="btn ghost sm" data-block="' + u.id + '" data-to="' + (u.status === 'blocked' ? 'active' : 'blocked') + '">' + (u.status === 'blocked' ? 'Unblock' : 'Block') + '</button>' +
+    '<span>' + (state.user && state.user.role === 'super_admin' ? '<button class="btn ghost sm" data-bal-edit="' + u.id + '">Edit Balance</button> ' : '') +
+    '<button class="btn ghost sm" data-block="' + u.id + '" data-to="' + (u.status === 'blocked' ? 'active' : 'blocked') + '">' + (u.status === 'blocked' ? 'Unblock' : 'Block') + '</button>' +
     (state.user && state.user.role === 'super_admin' && u.id !== state.user.id
       ? ' <button class="btn ghost sm" data-role="' + u.id + '" data-as="admin">Make Admin</button>' +
         ' <button class="btn ghost sm" data-role="' + u.id + '" data-as="super_admin">Make Super</button>' +
         ' <button class="btn ghost sm" data-role="' + u.id + '" data-as="player">Make Player</button>'
       : '') + '</span></div>').join('');
   return tabsHTML() + '<div class="card"><h3>Users</h3>' + (rows || '<p class="empty">No users yet.</p>') + '</div>';
+}
+function earningsHTML() {
+  const d = state.myDash;
+  if (!d) return tabsHTML() + '<div class="card"><p class="muted">Loading your dashboard…</p></div>';
+  const c = d.commissions || {};
+  const stat = (l, v) => '<div class="stat"><div class="muted">' + l + '</div><div class="stat-v">' + v + '</div></div>';
+  const invited = (d.invited_users || []).map(u =>
+    '<div class="txrow"><div><b>' + esc(u.phone) + '</b><div class="muted">' + esc(u.display_name || '') + ' · joined ' + fmtDate(u.created_at) + '</div></div>' +
+    '<div>' + money(u.deposits_ghs) + ' deposited</div></div>').join('');
+  const recent = (d.recent || []).map(r =>
+    '<div class="txrow"><div><b>' + money(r.amount_ghs) + '</b><div class="muted">' + r.pct + '% of ' + money(r.basis_ghs) + ' · from ' + esc(r.from_phone) + ' · ' + fmtDate(r.created_at) + '</div></div>' +
+    (r.paid_at ? chip('completed') : chip('pending')) + '</div>').join('');
+  return tabsHTML() +
+    '<div class="card"><h3>Your invite link</h3>' +
+    '<p class="muted">Share this link — every user who registers through it is attributed to you, and you earn the commission rate the super admin sets on their deposits.</p>' +
+    '<div class="manualbox"><div class="mannum" style="font-size:17px; letter-spacing:0">' + esc(siteLink(d.invite_path)) + '</div>' +
+    '<button class="btn gold" data-copy="' + esc(siteLink(d.invite_path)) + '">Copy Link</button></div></div>' +
+    '<div class="stats">' + stat('Commission earned', money(c.earned_ghs)) + stat('Paid out', money(c.paid_ghs)) + stat('Pending payout', money(c.pending_ghs)) + stat('Users invited', (d.invited_users || []).length) + '</div>' +
+    '<div class="card"><h3>Users you invited</h3>' + (invited || '<p class="empty">No invited users yet — share your link.</p>') + '</div>' +
+    '<div class="card"><h3>Recent commissions</h3>' + (recent || '<p class="empty">No commissions yet. They land here when an invited user\'s deposit is confirmed.</p>') + '</div>';
+}
+function controlHTML() {
+  if (!state.user || state.user.role !== 'super_admin') return tabsHTML() + '<div class="card"><p class="muted">Super admin only.</p></div>';
+  const s = state.settings || {};
+  const on = (v) => v === '1';
+  const pending = state.users.filter(u => u.role === 'admin' && u.status === 'pending');
+  const pendingRows = pending.map(u =>
+    '<div class="txrow"><div><b>' + esc(u.phone) + '</b><div class="muted">' + esc(u.display_name || '') + ' · applied ' + fmtDate(u.created_at) + '</div></div>' +
+    '<span><button class="btn gold sm" data-verify="' + u.id + '">Verify Admin</button> ' +
+    '<button class="btn ghost sm" data-remove-admin="' + u.id + '">Remove</button></span></div>').join('');
+  const commRows = ((state.myDash && state.myDash.admins) || []).map(a =>
+    '<div class="txrow"><div><b>' + esc(a.phone) + '</b><div class="muted">' + esc(a.role) + ' · ' + a.invited_count + ' invited users</div></div>' +
+    '<div>earned ' + money(a.earned) + ' · paid ' + money(a.paid) + ' · <b>pending ' + money(a.pending) + '</b></div>' +
+    (a.pending > 0 ? '<span><button class="btn gold sm" data-payout="' + a.id + '">Pay Out</button></span>' : '') + '</div>').join('');
+  const userOpts = state.users.map(u => '<option value="' + u.id + '">' + esc(u.phone) + ' (' + esc(u.role) + ')</option>').join('');
+  const inviteRows = state.invites.map(i =>
+    '<div class="txrow"><div><b>' + esc(i.kind) + ' invite</b><div class="muted">expires ' + fmtDate(i.expires_at) + '</div></div>' +
+    '<button class="btn ghost sm" data-copy="' + esc(siteLink('/?admin_invite=' + i.token)) + '">Copy Link</button></div>').join('');
+  return tabsHTML() +
+    '<div class="card"><h3>Switches</h3>' +
+    '<div class="txrow"><div><b>ShinobiPay gateway</b><div class="muted">Off = instant MoMo deposits stop; manual transfer keeps working.</div></div>' +
+    '<button class="btn ' + (on(s.gateway_enabled) ? 'gold' : 'ghost') + ' sm" data-toggle="gateway">' + (on(s.gateway_enabled) ? 'ON' : 'OFF') + '</button></div>' +
+    '<div class="txrow"><div><b>Payouts</b><div class="muted">Frozen = users cannot request withdrawals and the queue cannot confirm them.</div></div>' +
+    '<button class="btn ' + (on(s.payouts_frozen) ? 'gold' : 'ghost') + ' sm" data-toggle="freeze">' + (on(s.payouts_frozen) ? 'FROZEN' : 'OPEN') + '</button></div></div>' +
+    '<div class="card"><h3>Commission rates</h3><form id="ratesForm" class="stack">' +
+    '<label>Admin commission % (of invited users\' deposits) <input type="number" id="rateAdmin" step="0.1" min="0" max="50" value="' + esc(s.admin_commission_pct || '0') + '"></label>' +
+    '<label>User cashback % (of their own deposit, credited back instantly) <input type="number" id="rateUser" step="0.1" min="0" max="50" value="' + esc(s.user_cashback_pct || '0') + '"></label>' +
+    '<button class="btn gold big" type="submit">Save Rates</button></form></div>' +
+    '<div class="card"><h3>Give a bonus</h3><form id="bonusForm" class="stack">' +
+    '<label>Who <select id="bonusScope"><option value="all">All active players</option><option value="one">One account</option></select></label>' +
+    '<label>Account (for "One account") <select id="bonusUser">' + userOpts + '</select></label>' +
+    '<label>Amount (GHS) <input type="number" id="bonusAmt" step="0.01" min="0.01" required></label>' +
+    '<label>Note <input type="text" id="bonusNote" placeholder="e.g. Weekend bonus"></label>' +
+    '<button class="btn gold big" type="submit">Send Bonus</button></form></div>' +
+    '<div class="card"><h3>Admin invites</h3>' +
+    '<p class="muted">A timed, one-time link. An <b>admin</b> link creates a pending admin you verify below. A <b>super admin</b> link creates an active super admin immediately — share those carefully.</p>' +
+    (state.lastInvite ? '<div class="manualbox"><div class="mannum" style="font-size:14px; letter-spacing:0; word-break:break-all">' + esc(state.lastInvite) + '</div><button class="btn gold" data-copy="' + esc(state.lastInvite) + '">Copy Link</button></div>' : '') +
+    '<form id="inviteForm" class="stack">' +
+    '<label>Link type <select id="invKind"><option value="admin">Admin (needs verification)</option><option value="super_admin">Super admin (active at once)</option></select></label>' +
+    '<label>Expires after (hours) <input type="number" id="invHours" value="48" min="1" max="168"></label>' +
+    '<button class="btn gold big" type="submit">Generate Invite Link</button></form>' +
+    (inviteRows ? '<h4>Outstanding links</h4>' + inviteRows : '') + '</div>' +
+    '<div class="card"><h3>Pending admin verifications</h3>' + (pendingRows || '<p class="empty">No admins waiting for verification.</p>') + '</div>' +
+    '<div class="card"><h3>Admin commissions</h3>' + (commRows || '<p class="empty">No admin earnings yet.</p>') + '</div>';
+}
+function featuredFormHTML() {
+  if (!state.user || state.user.role !== 'super_admin') return '';
+  return '<div class="card"><h3>Create a featured match (super admin)</h3>' +
+    '<p class="muted">Your own game: it goes live by itself at kickoff, the clock and score run from your goal schedule, and it settles on the final scheduled score. Double Chance, Over/Under and BTTS prices are built from your 1X2 line.</p>' +
+    '<form id="featForm" class="stack">' +
+    '<label>League <input type="text" id="ffLeague" placeholder="PrimeStake Featured" required></label>' +
+    '<label>Home team <input type="text" id="ffHome" required></label>' +
+    '<label>Away team <input type="text" id="ffAway" required></label>' +
+    '<label>Kickoff <input type="datetime-local" id="ffStart" required></label>' +
+    '<div class="oddsgrid">' +
+    '<label>1 (home) <input type="number" step="0.01" min="1.01" id="ff_o1" required></label>' +
+    '<label>X (draw) <input type="number" step="0.01" min="1.01" id="ff_ox" required></label>' +
+    '<label>2 (away) <input type="number" step="0.01" min="1.01" id="ff_o2" required></label></div>' +
+    '<label>Goal schedule — minute:side, comma separated <input type="text" id="ffGoals" placeholder="e.g. 23:home, 57:away, 81:home"></label>' +
+    '<button class="btn gold big" type="submit">Create Featured Match</button></form></div>';
 }
 function supportHTML() {
   const rows = state.support.map(m =>
@@ -154,15 +238,23 @@ function render() {
     state.tab === 'dashboard' ? dashboardHTML() :
     state.tab === 'queue' ? tabsHTML() + queueHTML(false) :
     state.tab === 'matches' ? matchesHTML() :
-    state.tab === 'users' ? usersHTML() : supportHTML();
+    state.tab === 'users' ? usersHTML() :
+    state.tab === 'earnings' ? earningsHTML() :
+    state.tab === 'control' ? controlHTML() : supportHTML();
 }
 async function loadAll() {
   try {
-    const [stats, queue, matches, users, support] = await Promise.all([
-      api('/admin/stats'), api('/admin/queue'), api('/admin/matches'), api('/admin/users'), api('/admin/support')
-    ]);
+    const jobs = [
+      api('/admin/stats'), api('/admin/queue'), api('/admin/matches'), api('/admin/users'), api('/admin/support'),
+      api('/admin/settings').catch(() => null), api('/admin/my-dashboard').catch(() => null)
+    ];
+    if (state.user && state.user.role === 'super_admin') jobs.push(api('/admin/invite-admin').catch(() => null));
+    const [stats, queue, matches, users, support, settings, myDash, invites] = await Promise.all(jobs);
     state.stats = stats.stats; state.queue = queue.queue; state.matches = matches.matches;
     state.users = users.users; state.support = support.messages;
+    if (settings) state.settings = settings.settings;
+    if (myDash) state.myDash = myDash;
+    if (invites) state.invites = invites.invites || [];
   } catch (e) { toast(e.message); }
   render();
 }
@@ -180,6 +272,61 @@ document.addEventListener('click', async e => {
       toast('ESPN sync done: ' + data.imported + ' matches.');
       loadAll();
     } catch (err) { toast(err.message); btn.disabled = false; btn.textContent = 'Sync From ESPN'; }
+    return;
+  }
+  const copyBtn = e.target.closest('[data-copy]');
+  if (copyBtn) {
+    if (navigator.clipboard) navigator.clipboard.writeText(copyBtn.dataset.copy).catch(() => {});
+    toast('Copied: ' + copyBtn.dataset.copy);
+    return;
+  }
+  const toggleBtn = e.target.closest('[data-toggle]');
+  if (toggleBtn) {
+    const s = state.settings || {};
+    try {
+      const body = toggleBtn.dataset.toggle === 'gateway'
+        ? { gateway_enabled: s.gateway_enabled !== '1' }
+        : { payouts_frozen: s.payouts_frozen !== '1' };
+      const data = await api('/admin/settings', { method: 'POST', body });
+      state.settings = data.settings;
+      toast('Settings saved.');
+      render();
+    } catch (err) { toast(err.message); }
+    return;
+  }
+  const verifyBtn = e.target.closest('[data-verify]');
+  if (verifyBtn) {
+    try { await api('/admin/verify-admin', { method: 'POST', body: { id: verifyBtn.dataset.verify, action: 'verify' } }); toast('Admin verified.'); loadAll(); }
+    catch (err) { toast(err.message); }
+    return;
+  }
+  const removeBtn = e.target.closest('[data-remove-admin]');
+  if (removeBtn) {
+    try { await api('/admin/verify-admin', { method: 'POST', body: { id: removeBtn.dataset.removeAdmin, action: 'remove' } }); toast('Admin removed.'); loadAll(); }
+    catch (err) { toast(err.message); }
+    return;
+  }
+  const payoutBtn = e.target.closest('[data-payout]');
+  if (payoutBtn) {
+    try {
+      const data = await api('/admin/payout', { method: 'POST', body: { earner_id: payoutBtn.dataset.payout } });
+      toast('Paid out ' + money(data.paid_ghs) + ' (' + data.entries + ' entries).');
+      loadAll();
+    } catch (err) { toast(err.message); }
+    return;
+  }
+  const balBtn = e.target.closest('[data-bal-edit]');
+  if (balBtn) {
+    const u = state.users.find(x => x.id === balBtn.dataset.balEdit);
+    const delta = prompt('Adjust balance for ' + (u ? u.phone : '') + ' (current ' + (u ? money(u.balance_ghs) : '') + '). Enter a signed amount, e.g. 50 or -20:');
+    if (delta === null) return;
+    const note = prompt('Reason for this adjustment (shown in their transactions):', 'Balance adjustment');
+    if (note === null) return;
+    try {
+      const data = await api('/admin/balance-edit', { method: 'POST', body: { id: balBtn.dataset.balEdit, delta_ghs: Number(delta), note } });
+      toast('New balance: ' + money(data.balance_ghs));
+      loadAll();
+    } catch (err) { toast(err.message); }
     return;
   }
   const roleBtn = e.target.closest('[data-role]');
@@ -261,6 +408,57 @@ document.addEventListener('submit', async e => {
       state.user = data.user;
       loadAll();
     } catch (err) { toast(err.message); render(); }
+  } else if (e.target.id === 'ratesForm') {
+    e.preventDefault();
+    try {
+      const data = await api('/admin/settings', {
+        method: 'POST',
+        body: { admin_commission_pct: Number($('#rateAdmin').value), user_cashback_pct: Number($('#rateUser').value) }
+      });
+      state.settings = data.settings;
+      toast('Rates saved.');
+      render();
+    } catch (err) { toast(err.message); }
+  } else if (e.target.id === 'bonusForm') {
+    e.preventDefault();
+    const scope = $('#bonusScope').value;
+    try {
+      const data = await api('/admin/bonus', {
+        method: 'POST',
+        body: { scope, user_id: scope === 'one' ? $('#bonusUser').value : undefined, amount_ghs: Number($('#bonusAmt').value), note: $('#bonusNote').value.trim() || undefined }
+      });
+      toast('Bonus sent to ' + data.credited + ' account(s): ' + money(data.amount_ghs) + ' each.');
+      loadAll();
+    } catch (err) { toast(err.message); }
+  } else if (e.target.id === 'inviteForm') {
+    e.preventDefault();
+    try {
+      const data = await api('/admin/invite-admin', {
+        method: 'POST',
+        body: { kind: $('#invKind').value, hours: Number($('#invHours').value) || 48 }
+      });
+      state.lastInvite = siteLink(data.path);
+      toast('Invite link generated — it expires ' + fmtDate(data.expires_at) + '.');
+      loadAll();
+    } catch (err) { toast(err.message); }
+  } else if (e.target.id === 'featForm') {
+    e.preventDefault();
+    const goals = $('#ffGoals').value.split(',').map(x => x.trim()).filter(Boolean).map(part => {
+      const [min, side] = part.split(':').map(y => (y || '').trim());
+      return { minute: Number(min), side: side === 'away' ? 'away' : 'home' };
+    }).filter(g => g.minute >= 1 && g.minute <= 90);
+    try {
+      await api('/admin/create-match', {
+        method: 'POST',
+        body: {
+          league: $('#ffLeague').value.trim(), home_team: $('#ffHome').value.trim(), away_team: $('#ffAway').value.trim(),
+          starts_at: new Date($('#ffStart').value).toISOString(),
+          o1: Number($('#ff_o1').value), ox: Number($('#ff_ox').value), o2: Number($('#ff_o2').value), goals
+        }
+      });
+      toast('Featured match created — it plays by the clock from kickoff.');
+      loadAll();
+    } catch (err) { toast(err.message); }
   } else if (e.target.id === 'matchForm') {
     e.preventDefault();
     const keys = ['o1', 'ox', 'o2', 'dc1x', 'dc12', 'dcx2', 'over05', 'under05', 'over15', 'under15', 'over25', 'under25', 'over35', 'under35', 'over45', 'under45', 'gg', 'ng'];

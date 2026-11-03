@@ -11,6 +11,14 @@ const handlers = {
   support: require('../_handlers/admin/support'),
   'espn-sync': require('../_handlers/admin/espn-sync'),
   promote: require('../_handlers/admin/promote'),
+  settings: require('../_handlers/admin/settings'),
+  'create-match': require('../_handlers/admin/create-match'),
+  'invite-admin': require('../_handlers/admin/invite-admin'),
+  'verify-admin': require('../_handlers/admin/verify-admin'),
+  'balance-edit': require('../_handlers/admin/balance-edit'),
+  bonus: require('../_handlers/admin/bonus'),
+  'my-dashboard': require('../_handlers/admin/my-dashboard'),
+  payout: require('../_handlers/admin/payout'),
 };
 module.exports = (req, res) => {
   const action = (req.query && req.query.action) || String(req.url || '').split('?')[0].split('/').pop();

@@ -159,6 +159,48 @@ create trigger wallet_withdrawal_guard
   before insert on wallet_transactions
   for each row execute function enforce_withdrawal_rule();
 
+-- Admin platform: invite attribution, one-time invite links (admin and
+-- super-admin kinds), the commission ledger, featured-match goal
+-- schedules, and the super-admin control settings. The API also creates
+-- these lazily (ensureAdminTables), so this section is the record.
+alter table users add column if not exists invite_code text;
+create unique index if not exists users_invite_code_idx on users (invite_code) where invite_code is not null;
+alter table users add column if not exists invited_by uuid references users (id);
+-- users.status also allows 'pending' (invited admins awaiting verification).
+
+create table if not exists invites (
+  id uuid primary key default gen_random_uuid(),
+  token text not null unique,
+  kind text not null default 'admin',
+  created_by uuid references users (id),
+  expires_at timestamptz not null,
+  used_by uuid references users (id),
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists commissions (
+  id uuid primary key default gen_random_uuid(),
+  earner_id uuid not null references users (id),
+  source_user_id uuid not null references users (id),
+  source_txn_id uuid references wallet_transactions (id),
+  basis_ghs numeric(12, 2) not null,
+  pct numeric(6, 2) not null,
+  amount_ghs numeric(12, 2) not null,
+  paid_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create unique index if not exists commissions_source_idx on commissions (source_txn_id) where source_txn_id is not null;
+
+alter table matches add column if not exists goal_events jsonb not null default '[]'::jsonb;
+
+insert into operator_settings (key, value) values
+  ('gateway_enabled', '1'),
+  ('payouts_frozen', '0'),
+  ('admin_commission_pct', '0'),
+  ('user_cashback_pct', '0')
+on conflict (key) do nothing;
+
 -- What the admin payout queue screen reads.
 create or replace view admin_pending_queue as
   select wt.id, wt.user_id, u.phone, wt.kind, wt.method, wt.amount_ghs,

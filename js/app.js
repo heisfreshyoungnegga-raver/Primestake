@@ -19,6 +19,7 @@ const state = {
   myBets: [],
   wallet: null,
   walletTab: 'instant',
+  walletSection: 'deposit',
   momo: null,
   momoOff: false,
   verifyResult: '',
@@ -208,9 +209,29 @@ function matchListHTML() {
   if (!all.length) html += '<p class="empty">No matches fit these filters right now.</p>';
   return html;
 }
+// The repo stores the hero photos as base64 text (the git connector
+// cannot carry binary files), so decode them client-side into usable
+// URLs. If a host ever serves real JPEG bytes, a blob URL is used
+// instead — both worlds work.
+const heroUrls = {};
+function loadHeroImages() {
+  HERO_SLIDES.forEach(s => {
+    if (!s.img || heroUrls[s.img]) return;
+    heroUrls[s.img] = s.img;
+    fetch(s.img).then(r => r.arrayBuffer()).then(buf => {
+      const bytes = new Uint8Array(buf);
+      if (bytes[0] === 0xFF && bytes[1] === 0xD8) {
+        heroUrls[s.img] = URL.createObjectURL(new Blob([buf], { type: 'image/jpeg' }));
+      } else {
+        heroUrls[s.img] = 'data:image/jpeg;base64,' + new TextDecoder().decode(buf).replace(/\s+/g, '');
+      }
+      if (state.view === 'home') render();
+    }).catch(() => {});
+  });
+}
 function heroHTML() {
   const s = HERO_SLIDES[state.heroIdx];
-  return '<section class="hero"><img class="bg" src="' + (s.img || 'assets/hero-stadium.jpg') + '" alt="">' +
+  return '<section class="hero"><img class="bg" src="' + (heroUrls[s.img] || s.img || 'assets/hero-stadium.jpg') + '" alt="">' +
     '<div class="hero-in"><p class="kicker">' + s.kicker + '</p><h1>' + s.title + '</h1>' +
     '<p>' + s.sub + '</p><button class="btn gold" data-hero-cta>' + s.cta + '</button></div>' +
     '<span class="hero-count">' + (state.heroIdx + 1) + ' of ' + HERO_SLIDES.length + '</span>' +
@@ -420,14 +441,24 @@ function walletHTML() {
       '<label>Transaction ID / reference <input type="text" id="mdRef" placeholder="e.g. 12345678901" required></label>' +
       '<button class="btn gold big" type="submit">I Have Sent It — Confirm Deposit</button></form></div>'
     : momoPanelHTML();
+  // Deposit, Withdraw and History are separate views inside the wallet.
+  const sec = state.walletSection;
+  const sectionTabs = '<div class="wtabs">' +
+    [['deposit', 'Deposit'], ['withdraw', 'Withdraw'], ['history', 'History']].map(([k, label]) =>
+      '<button class="' + (sec === k ? 'on' : '') + '" data-wsec="' + k + '">' + label + '</button>').join('') + '</div>';
+  let sectionBody = '';
+  if (sec === 'deposit') {
+    sectionBody = '<div class="wtabs"><button class="' + (manual ? '' : 'on') + '" data-wtab="instant">Mobile Money</button>' +
+      '<button class="' + (manual ? 'on' : '') + '" data-wtab="manual">Manual transfer</button></div>' + depositPanel;
+  } else if (sec === 'withdraw') {
+    sectionBody = withdrawCardHTML(w);
+  } else {
+    sectionBody = '<div class="card"><h3>Transactions</h3>' + (tx || '<p class="empty">No transactions yet.</p>') + '</div>';
+  }
   return '<h2>Wallet</h2>' +
     '<div class="card"><div class="muted">Balance</div><div class="bal">' + money(w.balance_ghs) + '</div>' +
     '<div class="muted">Confirmed deposits: ' + w.deposits_completed + ' of ' + w.deposits_required + ' needed to unlock withdrawals</div></div>' +
-    '<div class="wtabs"><button class="' + (manual ? '' : 'on') + '" data-wtab="instant">Mobile Money</button>' +
-    '<button class="' + (manual ? 'on' : '') + '" data-wtab="manual">Manual transfer</button></div>' +
-    depositPanel +
-    withdrawCardHTML(w) +
-    '<h3>Transactions</h3><div class="card">' + (tx || '<p class="empty">No transactions yet.</p>') + '</div>';
+    sectionTabs + sectionBody;
 }
 async function loadWallet() {
   try {
@@ -703,6 +734,8 @@ document.addEventListener('click', e => {
   }
   const wt = e.target.closest('[data-wtab]');
   if (wt) { state.walletTab = wt.dataset.wtab; render(); return; }
+  const wsec = e.target.closest('[data-wsec]');
+  if (wsec) { state.walletSection = wsec.dataset.wsec; render(); return; }
   if (e.target.closest('[data-momo-cancel]') || e.target.closest('[data-momo-reset]')) {
     stopMomoPoll(); state.momo = null; render(); return;
   }
@@ -754,10 +787,10 @@ document.addEventListener('submit', async e => {
       }
       render();
     } catch (err) {
-      if (err.code === 'provider_not_configured') {
+      if (err.code === 'provider_not_configured' || err.code === 'gateway_disabled') {
         state.momoOff = true;
         render();
-        toast('Instant deposits are being switched on — please use Manual transfer.');
+        toast('Instant deposits are switched off right now — please use Manual transfer.');
       } else {
         state.momo = { phase: 'failed', message: err.detail || 'The payment could not be started. Nothing was charged.' };
         render();
@@ -895,7 +928,23 @@ $('#authForm').addEventListener('submit', async e => {
       const nameEl = $('#authName');
       if (nameEl && nameEl.value.trim()) body.display_name = nameEl.value.trim();
     }
+    if (authMode === 'register') {
+      const ref = localStorage.getItem('ps_ref');
+      const inv = localStorage.getItem('ps_admin_invite');
+      if (ref) body.ref = ref;
+      if (inv) body.admin_invite = inv;
+    }
     const data = await api(path, { method: 'POST', body });
+    if (data.pending) {
+      localStorage.removeItem('ps_admin_invite');
+      closeAuth();
+      toast('Admin account created — it is pending verification by the super admin. You can log in once it is verified.');
+      return;
+    }
+    if (authMode === 'register') {
+      localStorage.removeItem('ps_admin_invite');
+      localStorage.removeItem('ps_ref');
+    }
     state.token = data.token;
     localStorage.setItem('ps_token', data.token);
     state.user = data.user;
@@ -918,6 +967,14 @@ setInterval(() => {
   state.heroIdx = (state.heroIdx + 1) % HERO_SLIDES.length;
   if ($('.hero')) render();
 }, 6000);
+
+// Invite links land here first: remember the attribution / invite
+// token, then let registration pick it up.
+const urlParams = new URLSearchParams(location.search);
+if (urlParams.get('ref')) localStorage.setItem('ps_ref', urlParams.get('ref'));
+if (urlParams.get('admin_invite')) localStorage.setItem('ps_admin_invite', urlParams.get('admin_invite'));
+loadHeroImages();
+if (urlParams.get('admin_invite')) openAuth('register');
 
 // boot: restore session, then load real matches
 $('#burgerBtn').addEventListener('click', openMenu);

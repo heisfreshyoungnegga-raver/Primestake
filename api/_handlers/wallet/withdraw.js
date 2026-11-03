@@ -1,4 +1,4 @@
-const { sql, readBody, send, guard, requireAuth } = require('../../_lib');
+const { sql, readBody, send, guard, requireAuth, ensureAdminTables, getSettings } = require('../../_lib');
 
 // Withdrawal request: the balance is held immediately, and the database
 // trigger refuses the insert until the user reaches the required number
@@ -7,6 +7,11 @@ module.exports = guard(async (req, res) => {
   if (req.method !== 'POST') return send(res, 405, { error: 'method_not_allowed' });
   const auth = requireAuth(req, res);
   if (!auth) return;
+  await ensureAdminTables();
+  const settings = await getSettings(['payouts_frozen']);
+  if (settings.payouts_frozen === '1') {
+    return send(res, 403, { error: 'payouts_frozen', detail: 'Withdrawals are temporarily paused by the operator. Please check back shortly.' });
+  }
   const { amount_ghs, method } = await readBody(req);
   const amount = Number(amount_ghs);
   if (!(amount > 0)) return send(res, 400, { error: 'invalid_amount' });

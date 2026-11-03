@@ -1,13 +1,26 @@
-const { sql, readBody, send, guard, requireAdmin } = require('../../_lib');
+const { sql, readBody, send, guard, requireAdmin, ensureAdminTables, getSettings, applyDepositRewards } = require('../../_lib');
 
 // Confirm a pending deposit or withdrawal. A confirmed deposit credits
-// the balance in the same statement; a confirmed withdrawal was already
-// debited when the player requested it, so only the status changes.
+// the balance in the same statement and then pays the deposit rewards
+// (user cashback + inviter commission). A confirmed withdrawal was
+// already debited when the player requested it, so only the status
+// changes — and withdrawals cannot be confirmed while payouts are
+// frozen by the super admin.
 module.exports = guard(async (req, res) => {
   if (req.method !== 'POST') return send(res, 405, { error: 'method_not_allowed' });
   const auth = requireAdmin(req, res);
   if (!auth) return;
   const { id } = await readBody(req);
+  await ensureAdminTables();
+  const pending = await sql('select user_id, kind, amount_ghs from wallet_transactions where id = $1 and status = $2', [id, 'pending']);
+  if (!pending.length) return send(res, 404, { error: 'pending_transaction_not_found' });
+  const txn = pending[0];
+  if (txn.kind === 'withdrawal') {
+    const settings = await getSettings(['payouts_frozen']);
+    if (settings.payouts_frozen === '1') {
+      return send(res, 403, { error: 'payouts_frozen', detail: 'Payouts are frozen by the super admin. Unfreeze them in Platform Control before confirming withdrawals.' });
+    }
+  }
   const rows = await sql(
     `with t as (
        update wallet_transactions
@@ -24,5 +37,8 @@ module.exports = guard(async (req, res) => {
     [id, auth.uid]
   );
   if (!rows.length || Number(rows[0].updated) === 0) return send(res, 404, { error: 'pending_transaction_not_found' });
+  if (txn.kind === 'deposit') {
+    await applyDepositRewards(txn.user_id, id, Number(txn.amount_ghs));
+  }
   send(res, 200, { ok: true });
 });
