@@ -118,7 +118,7 @@ function guard(handler) {
 }
 
 function publicUser(u) {
-  return { id: u.id, phone: u.phone, display_name: u.display_name, role: u.role, status: u.status, balance_ghs: Number(u.balance_ghs) };
+  return { id: u.id, phone: u.phone, email: u.email || null, display_name: u.display_name, role: u.role, status: u.status, balance_ghs: Number(u.balance_ghs) };
 }
 function betCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';

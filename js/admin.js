@@ -66,7 +66,7 @@ function loginHTML() {
       ? 'Super admin accounts only. Platform Control lives here, not in the Admin Portal.'
       : 'Admin accounts only. This page is not linked from the public site.') + '</p>' +
     '<form id="adminLogin" class="stack">' +
-    '<label>Phone number <input type="tel" id="adPhone" required></label>' +
+    '<label>Phone number or email <input type="text" id="adPhone" required></label>' +
     '<label>Password <input type="password" id="adPass" required></label>' +
     '<button class="btn gold big" type="submit">Login</button></form>' +
     (state.offline ? '<p class="lock-note">Backend not configured yet — set DATABASE_URL and SESSION_SECRET in the Vercel project first.</p>' : '') +
@@ -251,7 +251,7 @@ function render() {
     root.innerHTML = loginHTML();
     return;
   }
-  head.innerHTML = '<span class="userchip">' + esc(state.user.phone) + '</span> ' +
+  head.innerHTML = '<span class="userchip">' + esc(state.user.phone || state.user.email || '') + '</span> ' +
     (isSuperPortal
       ? '<a class="btn ghost" href="admin.html">Admin Portal</a> '
       : (state.user.role === 'super_admin' ? '<a class="btn ghost" href="super-admin.html">Super Portal</a> ' : '')) +
@@ -439,7 +439,7 @@ document.addEventListener('submit', async e => {
   if (e.target.id === 'adminLogin') {
     e.preventDefault();
     try {
-      const data = await api('/auth/login', { method: 'POST', body: { phone: $('#adPhone').value.trim(), password: $('#adPass').value } });
+      const data = await api('/auth/login', { method: 'POST', body: { identifier: $('#adPhone').value.trim(), password: $('#adPass').value } });
       if (!portalAllows(data.user)) {
         toast(isSuperPortal
           ? 'That account is not a super admin account — use the Admin Portal instead.'

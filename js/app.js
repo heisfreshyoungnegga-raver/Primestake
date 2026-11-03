@@ -361,7 +361,7 @@ function profileHTML() {
       '<p class="modal-sub">Log in to see your account, bets and balance.</p>' +
       '<button class="btn gold big" data-open-auth>Login</button></div>';
   }
-  return '<div class="profile"><h2>' + esc(state.user.phone) + '</h2>' +
+  return '<div class="profile"><h2>' + esc(state.user.phone || state.user.email || '') + '</h2>' +
     '<div>Balance</div><div class="bal">' + money(state.user.balance_ghs) + '</div>' +
     '<button class="prow" data-nav="bets">My Bets <span>›</span></button>' +
     '<button class="prow" data-nav="wallet">Wallet &amp; Transactions <span>›</span></button>' +
@@ -610,7 +610,7 @@ async function loadSupport() {
 function settingsHTML() {
   if (!state.user) return gateHTML('Settings');
   return '<h2>Settings</h2><div class="card stack">' +
-    '<div class="card-row"><span>Phone</span><b>' + esc(state.user.phone) + '</b></div>' +
+    '<div class="card-row"><span>Phone / email</span><b>' + esc(state.user.phone || state.user.email || '') + '</b></div>' +
     '<div class="card-row"><span>Region / currency</span><b>Ghana · GHS</b></div>' +
     '<h3>Change password</h3><form id="passwordForm" class="stack">' +
     '<label>Current password <input type="password" id="pwCurrent" required></label>' +
@@ -727,6 +727,15 @@ function syncAuth() {
   $('#authSubmit').textContent = login ? 'Login' : 'Register';
   const nameRow = $('#authNameRow');
   if (nameRow) nameRow.style.display = login ? 'none' : '';
+  // Admin-invite registration gets the email field and an optional
+  // phone (either identifier works at login); login is labelled for both.
+  const hasInvite = !!localStorage.getItem('ps_admin_invite');
+  const emailRow = $('#authEmailRow');
+  if (emailRow) emailRow.style.display = (!login && hasInvite) ? '' : 'none';
+  const phoneInput = $('#authPhone');
+  if (phoneInput) phoneInput.required = login || !hasInvite;
+  const phoneLabel = $('#authPhoneLabel');
+  if (phoneLabel) phoneLabel.textContent = login ? 'Phone number or email' : (hasInvite ? 'Phone number (optional if you gave an email)' : 'Phone number');
   $('#authAlt').innerHTML = login
     ? 'Don\'t have an account? <a href="#" id="authAltLink">Register</a>'
     : 'Already have an account? <a href="#" id="authAltLink">Login</a>';
@@ -1061,13 +1070,19 @@ $('#authForm').addEventListener('submit', async e => {
   e.preventDefault();
   const phone = $('#authPhone').value.trim();
   const password = $('#authPass').value;
-  if (!phone || !password) return;
+  const emailEl = $('#authEmail');
+  const email = emailEl ? emailEl.value.trim() : '';
+  // An admin invite may register with email alone (no phone); every
+  // other path needs phone + password. Login takes either identifier.
+  const inviteRegister = authMode === 'register' && !!localStorage.getItem('ps_admin_invite');
+  if (!password || (!phone && !(inviteRegister && email))) return;
   const btn = $('#authSubmit');
   btn.disabled = true;
   try {
     const path = authMode === 'login' ? '/auth/login' : '/auth/register';
-    const body = { phone, password };
+    const body = authMode === 'login' ? { identifier: phone, password } : { phone, password };
     if (authMode === 'register') {
+      if (email) body.email = email;
       const nameEl = $('#authName');
       if (nameEl && nameEl.value.trim()) body.display_name = nameEl.value.trim();
     }

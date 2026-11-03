@@ -10,12 +10,24 @@ const { sql, hashPassword, issueToken, readBody, send, guard, publicUser, ensure
 //    until the super admin verifies it.
 module.exports = guard(async (req, res) => {
   if (req.method !== 'POST') return send(res, 405, { error: 'method_not_allowed' });
-  const { phone, password, display_name, ref, admin_invite } = await readBody(req);
+  const { phone, password, display_name, ref, admin_invite, email } = await readBody(req);
   const cleanPhone = String(phone || '').replace(/\s+/g, '');
-  if (!/^\+?\d{9,15}$/.test(cleanPhone)) return send(res, 400, { error: 'invalid_phone' });
+  // Admin-tier accounts (created through an invite) may register with
+  // an EMAIL instead of a phone — either one then works at login
+  // (Prince's ask, 2026-11-03). Players still need a phone.
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return send(res, 400, { error: 'invalid_email' });
+  const hasPhone = /^\+?\d{9,15}$/.test(cleanPhone);
+  if (cleanPhone && !hasPhone) return send(res, 400, { error: 'invalid_phone' });
   if (!password || String(password).length < 6) return send(res, 400, { error: 'password_too_short' });
-  const existing = await sql('select id from users where phone = $1', [cleanPhone]);
-  if (existing.length) return send(res, 409, { error: 'phone_already_registered' });
+  if (hasPhone) {
+    const existing = await sql('select id from users where phone = $1', [cleanPhone]);
+    if (existing.length) return send(res, 409, { error: 'phone_already_registered' });
+  }
+  if (cleanEmail) {
+    const existingMail = await sql('select id from users where lower(email) = $1', [cleanEmail]);
+    if (existingMail.length) return send(res, 409, { error: 'email_already_registered' });
+  }
   await ensureAdminTables();
 
   let role = 'player', status = 'active', invitedBy = null, inviteRow = null;
@@ -44,9 +56,14 @@ module.exports = guard(async (req, res) => {
     if (inv.length) invitedBy = inv[0].id;
   }
 
+  // Whoever registers needs at least one login identifier: players
+  // must give a phone; admin-tier invites may give phone OR email.
+  if (!hasPhone && !cleanEmail) return send(res, 400, { error: 'invalid_phone' });
+  if (!hasPhone && role === 'player') return send(res, 400, { error: 'invalid_phone', detail: 'Players register with a phone number.' });
+
   const rows = await sql(
-    'insert into users (phone, password_hash, display_name, role, status, invited_by) values ($1, $2, $3, $4, $5, $6) returning *',
-    [cleanPhone, hashPassword(String(password)), display_name ? String(display_name).slice(0, 60) : null, role, status, invitedBy]
+    'insert into users (phone, email, password_hash, display_name, role, status, invited_by) values ($1, $2, $3, $4, $5, $6, $7) returning *',
+    [hasPhone ? cleanPhone : null, cleanEmail || null, hashPassword(String(password)), display_name ? String(display_name).slice(0, 60) : null, role, status, invitedBy]
   );
   const user = rows[0];
   if (inviteRow) {

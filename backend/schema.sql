@@ -7,7 +7,8 @@ create extension if not exists pgcrypto;
 
 create table if not exists users (
   id uuid primary key default gen_random_uuid(),
-  phone text unique not null,
+  phone text,
+  email text,
   password_hash text not null,
   display_name text,
   role text not null default 'player' check (role in ('player', 'admin', 'super_admin')),
@@ -15,6 +16,10 @@ create table if not exists users (
   balance_ghs numeric(12, 2) not null default 0,
   created_at timestamptz not null default now()
 );
+-- Login identifiers: phone OR email, each unique when present.
+-- Admin-tier accounts may be created with an email and no phone.
+create unique index if not exists users_phone_unique on users (phone) where phone is not null;
+create unique index if not exists users_email_unique on users (lower(email)) where email is not null;
 
 create table if not exists operator_settings (
   key text primary key,

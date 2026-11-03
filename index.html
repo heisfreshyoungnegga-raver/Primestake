@@ -78,7 +78,10 @@
       <label id="authNameRow" style="display:none">Display name (optional)
         <input type="text" id="authName" placeholder="Your name" autocomplete="name">
       </label>
-      <label>Phone number
+      <label id="authEmailRow" style="display:none">Email (admin accounts: phone or email, either works at login)
+        <input type="email" id="authEmail" placeholder="you@example.com" autocomplete="email">
+      </label>
+      <label><span id="authPhoneLabel">Phone number</span>
         <input type="tel" id="authPhone" placeholder="05X XXX XXXX" autocomplete="tel" required>
       </label>
       <label>Password
