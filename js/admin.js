@@ -24,7 +24,6 @@ const state = {
   tab: 'dashboard',
   stats: null, queue: [], matches: [], users: [], support: [],
   settings: null, myDash: null, invites: [], lastInvite: '',
-  pwdPrompt: false, pwdSkipped: false,
   offline: false,
 };
 const $ = (s, r = document) => r.querySelector(s);
@@ -75,18 +74,6 @@ function loginHTML() {
       ? 'Regular admin? Use the <a href="admin.html">Admin Portal</a>.'
       : 'Super admin? Use the <a href="super-admin.html">Super Admin Portal</a>.') + '</p>' +
     '</div>';
-}
-// The super-admin change-password prompt card (3rd sign-in rule):
-// sits on top of every tab until the password is changed or Skip
-// is tapped; Skip only snoozes it to the next sign-in.
-function pwdPromptHTML() {
-  return '<div class="card" style="border:2px solid var(--accent)"><h3>Change your password</h3>' +
-    '<p class="muted">This is your 3rd sign-in as super admin. For security, set a fresh password now — or skip and you will be asked again on your next sign-in.</p>' +
-    '<form id="pwdChangeForm" class="stack">' +
-    '<label>Current password <input type="password" id="pwdCur" required></label>' +
-    '<label>New password (at least 6 characters) <input type="password" id="pwdNew" required minlength="6"></label>' +
-    '<div><button class="btn gold" type="submit">Change password</button> ' +
-    '<button class="btn ghost" type="button" id="pwdSkip">Skip for now</button></div></form></div>';
 }
 function tabsHTML() {
   const tabs = [['dashboard', 'Dashboard'], ['queue', 'Payout Queue'], ['matches', 'Matches'], ['users', 'Users'], ['support', 'Support'], ['earnings', 'My Earnings']];
@@ -275,15 +262,12 @@ function render() {
     render();
   });
   root.innerHTML =
-    (state.pwdPrompt && !state.pwdSkipped ? pwdPromptHTML() : '') +
-    (state.tab === 'dashboard' ? dashboardHTML() :
+    state.tab === 'dashboard' ? dashboardHTML() :
     state.tab === 'queue' ? tabsHTML() + queueHTML(false) :
     state.tab === 'matches' ? matchesHTML() :
     state.tab === 'users' ? usersHTML() :
     state.tab === 'earnings' ? earningsHTML() :
-    state.tab === 'control' ? controlHTML() : supportHTML());
-  const skipBtn = $('#pwdSkip');
-  if (skipBtn) skipBtn.addEventListener('click', () => { state.pwdSkipped = true; render(); });
+    state.tab === 'control' ? controlHTML() : supportHTML();
 }
 async function loadAll() {
   try {
@@ -465,20 +449,8 @@ document.addEventListener('submit', async e => {
       state.token = data.token;
       localStorage.setItem('ps_admin_token', data.token);
       state.user = data.user;
-      // Super-admin 3rd-sign-in password prompt (server decides via
-      // data.pwdPrompt); Skip hides it for this session only.
-      state.pwdPrompt = !!data.pwdPrompt;
-      state.pwdSkipped = false;
       loadAll();
     } catch (err) { toast(err.message); render(); }
-  } else if (e.target.id === 'pwdChangeForm') {
-    e.preventDefault();
-    try {
-      await api('/auth/password', { method: 'POST', body: { current_password: $('#pwdCur').value, new_password: $('#pwdNew').value } });
-      state.pwdPrompt = false;
-      toast('Password changed. You will not be asked again.');
-      render();
-    } catch (err) { toast(err.message); }
   } else if (e.target.id === 'ratesForm') {
     e.preventDefault();
     try {

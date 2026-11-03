@@ -10,8 +10,6 @@ module.exports = guard(async (req, res) => {
   if (!rows.length || !verifyPassword(String(current_password || ''), rows[0].password_hash)) {
     return send(res, 401, { error: 'current_password_wrong' });
   }
-  // A successful change also retires the super-admin 3rd-sign-in
-  // change-password prompt for good (see auth/login).
-  await sql('update users set password_hash = $1, pwd_prompt_done = true where id = $2', [hashPassword(String(new_password)), auth.uid]);
+  await sql('update users set password_hash = $1 where id = $2', [hashPassword(String(new_password)), auth.uid]);
   send(res, 200, { ok: true });
 });

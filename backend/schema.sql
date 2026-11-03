@@ -15,10 +15,6 @@ create table if not exists users (
   balance_ghs numeric(12, 2) not null default 0,
   created_at timestamptz not null default now()
 );
--- Super-admin password-prompt rule (added 2026-11-03): count sign-ins;
--- from the 3rd, portals prompt a password change until pwd_prompt_done.
-alter table users add column if not exists login_count integer not null default 0;
-alter table users add column if not exists pwd_prompt_done boolean not null default false;
 
 create table if not exists operator_settings (
   key text primary key,
