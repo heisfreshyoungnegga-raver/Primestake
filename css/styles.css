@@ -701,6 +701,12 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 .filterbtn svg { width: 16px; height: 16px; }
 .filterbtn.on { background: var(--accent); color: var(--accent-ink); }
 .frows.closed { display: none; }
+.mrow { cursor: pointer; }
+.md-odds { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+.md-odds .odd { width: 100%; }
+.md-sec h3 { margin-top: 0; }
+.md-teams .team { font-size: 17px; font-weight: 700; padding: 2px 0; }
+.md-when { color: var(--muted); margin: 4px 0 8px; }
 .filtercard .searchbar { position: relative; }
 .filtercard .searchbar input {
   width: 100%; padding: 12px 14px 12px 40px; font-size: 15px;

@@ -11,6 +11,7 @@ const state = {
   sport: 'Soccer',
   query: '',
   filtersOpen: false,
+  matchId: null, prevView: 'home',
   slip: new Map(), // key -> {matchId, matchLabel, league, market, pick, odd}
   user: null,
   token: localStorage.getItem('ps_token') || '',
@@ -125,13 +126,14 @@ async function loadMatches() {
     state.matchesLoaded = true;
     if (e.code !== 'backend_not_configured') console.warn('matches load failed', e.code);
   }
-  if (['home', 'live', 'sports', 'virtual'].includes(state.view)) render();
+  if (['home', 'live', 'sports', 'virtual', 'match'].includes(state.view)) render();
 }
 function leagues() {
   return ['All', ...new Set(state.matches.map(m => m.league))];
 }
-function marketsFor(m) {
-  return MARKET_KEYS[state.market]
+function marketsFor(m) { return marketsForMarket(m, state.market); }
+function marketsForMarket(m, market) {
+  return (MARKET_KEYS[market] || [])
     .map(([label, key]) => ({ label, odd: Number(m.odds[key]) }))
     .filter(o => o.odd > 1);
 }
@@ -174,7 +176,7 @@ function rowHTML(m) {
   } else {
     time = '<span>' + fmtDate(m.starts_at) + '</span>';
   }
-  return '<div class="mrow">' +
+  return '<div class="mrow" data-match="' + m.id + '">' +
     '<div class="mtime">' + time + '</div>' +
     '<div class="mteams"><div class="league">' + esc(m.league) + '</div>' +
     '<div class="team">' + (m.home_logo ? '<img class="tlogo" src="' + esc(m.home_logo) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + esc(m.home) + '</div>' +
@@ -194,6 +196,32 @@ function dayLabel(iso) {
   const t = new Date(now); t.setDate(t.getDate() + 1);
   if (sameDay(d, t)) return 'TOMORROW';
   return d.toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'short' }).toUpperCase();
+}
+// Match details (Prince's ask, 2026-11-03): tapping a match card
+// opens this page with EVERY market the system holds for the game —
+// 1X2, Double Chance, every Over/Under line and BTTS — priced from
+// the same ESPN-fed odds book the list uses. Selections add to the
+// slip exactly like list odds (one selection per match).
+function matchDetailsHTML() {
+  const m = state.matches.find(x => x.id === state.matchId);
+  const back = '<button class="btn ghost" data-back style="margin:10px 0">‹ Back</button>';
+  if (!m) return back + '<div class="card"><h3>Match not available</h3><p class="muted">It may have finished or been removed.</p></div>';
+  const when = m.status === 'live'
+    ? '<span class="live-min">' + (m.minute != null ? m.minute + '&prime;' : 'LIVE') + '</span> <span class="score">' + m.sh + ' - ' + m.sa + '</span>'
+    : esc(fmtDate(m.starts_at));
+  const team = (name, logo) => '<div class="team">' + (logo ? '<img class="tlogo" src="' + esc(logo) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + esc(name) + '</div>';
+  let html = back + '<div class="card"><div class="league">' + esc(m.league) + '</div>' +
+    '<div class="md-when">' + when + '</div>' +
+    '<div class="md-teams">' + team(m.home, m.home_logo) + team(m.away, m.away_logo) + '</div></div>';
+  for (const market of MARKET_LIST) {
+    const opts = marketsForMarket(m, market);
+    if (!opts.length) continue;
+    html += '<div class="card md-sec"><h3>' + esc(market) + '</h3><div class="md-odds">' + opts.map(o => {
+      const sel = state.slip.has(slipKey(m.id, market, o.label)) ? ' sel' : '';
+      return '<button class="odd' + sel + '" data-odd="' + m.id + '" data-market="' + esc(market) + '" data-pick="' + esc(o.label) + '"><small>' + esc(o.label) + '</small>' + o.odd.toFixed(2) + '</button>';
+    }).join('') + '</div></div>';
+  }
+  return html;
 }
 function matchListHTML() {
   if (state.offline) {
@@ -638,6 +666,7 @@ function viewHTML() {
     case 'promos': return promosHTML();
     case 'support': return supportHTML();
     case 'settings': return settingsHTML();
+    case 'match': return matchDetailsHTML();
     case 'live':
     case 'sports':
     case 'virtual':
@@ -821,23 +850,41 @@ document.addEventListener('click', e => {
     const m = state.matches.find(x => x.id === odd.dataset.odd);
     if (!m) return;
     const pick = odd.dataset.pick;
-    const key = slipKey(m.id, state.market, pick);
+    // Details-page buttons carry their own market; list buttons use
+    // the market chosen in the filter chips.
+    const market = odd.dataset.market || state.market;
+    const key = slipKey(m.id, market, pick);
     if (state.slip.has(key)) {
       state.slip.delete(key);
     } else {
       [...state.slip.keys()].forEach(k => {
         if (k.startsWith(m.id + '|')) state.slip.delete(k);
       });
-      const o = marketsFor(m).find(x => x.label === pick);
+      const o = marketsForMarket(m, market).find(x => x.label === pick);
       if (!o) return;
       state.slip.set(key, {
         matchId: m.id,
         matchLabel: m.home + ' vs ' + m.away,
-        league: m.league, market: state.market, pick, odd: o.odd,
+        league: m.league, market, pick, odd: o.odd,
       });
     }
     renderSlip();
     render();
+    return;
+  }
+  if (e.target.closest('[data-back]')) {
+    state.view = state.prevView || 'home';
+    state.matchId = null;
+    render();
+    return;
+  }
+  const mrow = e.target.closest('[data-match]');
+  if (mrow && !e.target.closest('button, a, input, select, textarea')) {
+    state.prevView = ['home', 'live', 'sports', 'virtual'].includes(state.view) ? state.view : 'home';
+    state.matchId = mrow.dataset.match;
+    state.view = 'match';
+    render();
+    window.scrollTo(0, 0);
     return;
   }
   const rm = e.target.closest('[data-rm]');
@@ -1133,7 +1180,7 @@ setInterval(() => {
 // and loadMatches re-renders the match views).
 setInterval(() => {
   if (document.hidden) return;
-  if (['home', 'live', 'sports', 'virtual'].includes(state.view)) loadMatches();
+  if (['home', 'live', 'sports', 'virtual', 'match'].includes(state.view)) loadMatches();
 }, 60000);
 
 // Invite links land here first: remember the attribution / invite
