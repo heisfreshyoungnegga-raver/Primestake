@@ -94,7 +94,7 @@ function errToast(e, fallback) {
     password_too_short: 'Password must be at least 6 characters.',
     invalid_phone: 'Enter a valid phone number.',
     account_blocked: 'This account has been blocked. Contact support.',
-    withdrawal_locked: 'Withdrawals are locked until you complete the required deposits.',
+    withdrawal_locked: 'Withdrawals are not available on your account yet — please contact support.',
     match_finished: 'One of those matches has already finished.',
     one_selection_per_match: 'Only one selection per match on a slip.',
     market_unavailable: 'One of those markets is not available right now.',
@@ -264,6 +264,7 @@ function filtersHTML() {
 const QICONS = {
   'Soccer': '<svg viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="1.7" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7l3 2.2-1.1 3.6h-3.8L9 9.2 12 7z" fill="#141414" stroke="none"/><path d="M12 3v4M18.6 6.4L15 9.2M20.1 14.6l-4.7-1.3M15.4 20.2l-1.5-4.4M8.6 20.2l1.5-4.4M3.9 14.6l4.7-1.3M5.4 6.4L9 9.2"/></svg>',
   'Today': '<svg viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="1.7" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle cx="12" cy="15.5" r="1.4" fill="#141414" stroke="none"/></svg>',
+  'Live': '<svg viewBox="0 0 24 24" fill="none" stroke="#d8232a" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="2.2" fill="#d8232a" stroke="none"/><path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.8 5.8a9 9 0 0 0 0 12.4M18.2 5.8a9 9 0 0 1 0 12.4"/></svg>',
   'Aviator': '<svg viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="1.7" stroke-linejoin="round"><path d="M21 3L10.6 13.4M21 3l-6.6 18-3.8-7.6L3 9.6 21 3z"/></svg>',
   'Basketball': '<svg viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M3.2 12h17.6M12 3.2v17.6M5.6 5.6c3.4 3.6 3.4 9.2 0 12.8M18.4 5.6c-3.4 3.6-3.4 9.2 0 12.8"/></svg>',
   'Verify Bet': '<svg viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 2.5V11c0 4.6-3 7.7-7 9.5C8 18.7 5 15.6 5 11V5.5L12 3z"/><path d="M9 11.6l2.2 2.2 4.3-4.3"/></svg>',
@@ -275,6 +276,7 @@ const QICONS = {
 const TILE_IMGS = {
   'Soccer': 'assets/icon-soccer.jpg',
   'Today': 'assets/icon-today.jpg',
+  'Live': 'assets/icon-live.jpg',
   'Aviator': 'assets/icon-aviator.jpg',
   'Basketball': 'assets/icon-basketball.jpg',
   'Verify Bet': 'assets/icon-verify.jpg',
@@ -299,6 +301,7 @@ function quickHTML() {
   const tiles = [
     ['Soccer', ''],
     ['Today', ''],
+    ['Live', ''],
     ['Aviator', 'hot'],
     ['Basketball', ''],
     ['Verify Bet', ''],
@@ -406,20 +409,15 @@ async function loadBets() {
   if (state.view === 'bets') render();
 }
 function withdrawCardHTML(w) {
-  const n = w.deposits_completed, req = w.deposits_required;
-  const unlocked = w.withdrawals_unlocked;
-  const pct = Math.min(100, Math.round(n / req * 100));
+  // The deposit-count withdrawal rule stays enforced server-side, but
+  // players never see the counter or the requirement (Prince's call,
+  // 2026-11-03): the card is a plain withdraw form, and a not-yet-eligible
+  // request comes back with the generic toast so support handles it.
   return '<div class="card"><h3>Withdraw</h3>' +
-    '<p class="muted">Withdrawal rule: you must complete <b>' + req + ' deposits</b> before you can withdraw.</p>' +
-    '<div class="lockrow"><span>Deposits completed</span><b>' + n + ' / ' + req + '</b></div>' +
-    '<div class="lockbar"><div class="lockfill" style="width:' + pct + '%"></div></div>' +
-    (unlocked
-      ? '<p class="unlock-note">Withdrawals unlocked — you have completed ' + n + ' deposits.</p>'
-      : '<p class="lock-note">Withdrawals locked — ' + (req - n) + ' more confirmed deposit(s) needed. Manual deposits count once they are confirmed.</p>') +
     '<form id="withdrawForm" class="stack">' +
     '<label>Amount (GHS) <input type="number" id="wdAmt" min="1" value="50" required></label>' +
     '<label>Pay to <select id="wdMethod"><option>MTN MoMo</option><option>Telecel Cash</option><option>AT Money</option></select></label>' +
-    '<button class="btn gold big" type="submit"' + (unlocked ? '' : ' disabled') + '>Request Withdrawal</button></form>' +
+    '<button class="btn gold big" type="submit">Request Withdrawal</button></form>' +
     '<p class="muted">The amount is held from your balance when you request; it is paid out after review. A rejected request refunds the hold.</p></div>';
 }
 /* ----- Instant MoMo deposit (ShinobiPay direct push) ----- */
@@ -545,8 +543,7 @@ function walletHTML() {
     sectionBody = '<div class="card"><h3>Transactions</h3>' + (tx || '<p class="empty">No transactions yet.</p>') + '</div>';
   }
   return '<h2>Wallet</h2>' +
-    '<div class="card"><div class="muted">Balance</div><div class="bal">' + money(w.balance_ghs) + '</div>' +
-    '<div class="muted">Confirmed deposits: ' + w.deposits_completed + ' of ' + w.deposits_required + ' needed to unlock withdrawals</div></div>' +
+    '<div class="card"><div class="muted">Balance</div><div class="bal">' + money(w.balance_ghs) + '</div></div>' +
     sectionTabs + sectionBody;
 }
 async function loadWallet() {
@@ -818,6 +815,7 @@ document.addEventListener('click', e => {
     const q = quick.dataset.quick;
     if (q === 'Soccer') { state.sport = 'Soccer'; state.view = 'sports'; render(); }
     else if (q === 'Today') { state.sport = 'Soccer'; state.view = 'home'; state.date = 'Today'; render(); }
+    else if (q === 'Live') { state.sport = 'Soccer'; state.view = 'live'; render(); }
     else if (q === 'Aviator') { state.view = 'games'; render(); }
     else if (q === 'Basketball') { state.sport = 'Basketball'; state.view = 'sports'; render(); }
     else if (q === 'Verify Bet') { state.view = 'verify'; render(); }
