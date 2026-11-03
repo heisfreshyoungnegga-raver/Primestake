@@ -18,7 +18,9 @@ const state = {
   offline: false,
   myBets: [],
   wallet: null,
-  walletTab: 'manual',
+  walletTab: 'instant',
+  momo: null,
+  momoOff: false,
   verifyResult: '',
   slipCode: '',
   supportMsgs: [],
@@ -315,6 +317,83 @@ function withdrawCardHTML(w) {
     '<button class="btn gold big" type="submit"' + (unlocked ? '' : ' disabled') + '>Request Withdrawal</button></form>' +
     '<p class="muted">The amount is held from your balance when you request; it is paid out after review. A rejected request refunds the hold.</p></div>';
 }
+/* ----- Instant MoMo deposit (ShinobiPay direct push) ----- */
+function detectNetworkJS(raw) {
+  const digits = String(raw || '').replace(/[\s+]/g, '');
+  const local = digits.startsWith('233') ? '0' + digits.slice(3) : digits;
+  const p = local.slice(0, 3);
+  if (['024', '025', '053', '054', '055', '059'].includes(p)) return 'MTN';
+  if (['020', '050'].includes(p)) return 'TELECEL';
+  if (['026', '027', '056', '057'].includes(p)) return 'AIRTELTIGO';
+  return null;
+}
+function syncMomoFee() {
+  const line = $('#mmFeeLine');
+  if (!line) return;
+  const amt = parseFloat(($('#mmAmt') || {}).value) || 0;
+  line.textContent = amt > 0
+    ? 'Your phone will ask you to approve GHS ' + (amt * 1.025).toFixed(2) + ' (includes the 2.5% processing fee). Your wallet is credited exactly GHS ' + amt.toFixed(2) + '.'
+    : '';
+}
+let momoTimer = null;
+function stopMomoPoll() { if (momoTimer) { clearInterval(momoTimer); momoTimer = null; } }
+function startMomoPoll() {
+  stopMomoPoll();
+  let tries = 0;
+  momoTimer = setInterval(async () => {
+    tries++;
+    if (!state.momo || state.momo.phase !== 'wait' || state.view !== 'wallet' || tries > 45) { stopMomoPoll(); return; }
+    try {
+      const d = await api('/wallet/deposit-status?reference=' + encodeURIComponent(state.momo.reference));
+      if (d.status === 'succeeded') {
+        stopMomoPoll();
+        state.momo = null;
+        toast('Deposit confirmed — your wallet has been credited.');
+        loadWallet();
+      } else if (d.status === 'failed') {
+        stopMomoPoll();
+        state.momo = { phase: 'failed', message: 'The payment did not go through. Nothing was charged.' };
+        render();
+      }
+    } catch (e) { /* keep waiting — the webhook is the real signal */ }
+  }, 4000);
+}
+function momoPanelHTML() {
+  const m = state.momo;
+  if (state.momoOff) {
+    return '<div class="card"><h3>Mobile Money</h3>' +
+      '<p class="muted">Instant mobile money deposits are being switched on. Please use <b>Manual transfer</b> for now — it is confirmed and credited by our team.</p></div>';
+  }
+  if (m && m.phase === 'wait') {
+    return '<div class="card"><h3>Check your phone</h3>' +
+      '<p>We sent a payment prompt to <b>' + esc(m.phone) + '</b>. Approve it with your MoMo PIN to deposit <b>' + money(m.amount) + '</b>.</p>' +
+      (m.ussd ? '<p class="muted">No prompt? Dial <b>' + esc(m.ussd) + '</b> and approve the pending transaction from your MoMo menu.</p>' : '') +
+      '<p class="muted">Waiting for confirmation… your balance updates automatically once the payment lands. Do not pay twice.</p>' +
+      '<button class="btn" data-momo-cancel>Cancel</button></div>';
+  }
+  if (m && m.phase === 'otp') {
+    return '<div class="card"><h3>Enter the code</h3>' +
+      '<p class="muted">Your network sent a one-time code for the deposit of <b>' + money(m.amount) + '</b>. Enter it to finish.</p>' +
+      '<form id="momoOtpForm" class="stack"><label>One-time code <input type="text" id="mmOtp" inputmode="numeric" autocomplete="one-time-code" required></label>' +
+      '<button class="btn gold big" type="submit">Confirm Code</button></form>' +
+      '<button class="btn" data-momo-cancel>Cancel</button></div>';
+  }
+  if (m && m.phase === 'failed') {
+    return '<div class="card"><h3>Payment not completed</h3>' +
+      '<p class="lock-note">' + esc(m.message || 'The payment did not go through. Nothing was charged.') + '</p>' +
+      '<button class="btn gold" data-momo-reset>Try Again</button></div>';
+  }
+  const phone = state.user ? state.user.phone : '';
+  return '<div class="card"><h3>Mobile Money</h3>' +
+    '<form id="momoForm" class="stack">' +
+    '<label>Amount (GHS) <input type="number" id="mmAmt" min="1" max="5000" step="0.01" value="50" required></label>' +
+    '<label>MoMo number <input type="tel" id="mmPhone" value="' + esc(phone) + '" required></label>' +
+    '<label>Network <select id="mmNet"><option value="MTN">MTN Mobile Money</option><option value="TELECEL">Telecel Cash</option><option value="AIRTELTIGO">AT Money</option></select></label>' +
+    '<p class="muted" id="mmFeeLine"></p>' +
+    '<button class="btn gold big" type="submit">Send Payment Prompt</button></form>' +
+    '<p class="muted">A prompt is sent to your phone — approve it with your PIN and your wallet is credited automatically.</p></div>';
+}
+
 function walletHTML() {
   if (!state.user) return gateHTML('Wallet');
   const w = state.wallet;
@@ -326,7 +405,7 @@ function walletHTML() {
   const md = w.manual_deposit;
   const manual = state.walletTab === 'manual';
   const depositPanel = manual
-    ? '<div class="card"><h3>Manual Deposit — ' + esc(md.network) + '</h3>' +
+    ? '<div class="card"><h3>Manual transfer — ' + esc(md.network) + '</h3>' +
       '<div class="manualbox"><div class="muted">Send money to</div>' +
       '<div class="mannum">' + esc(md.number.replace(/(\d{4})(\d{3})(\d{3})/, '$1 $2 $3')) + '</div>' +
       '<div class="manname">' + esc(md.name) + '</div>' +
@@ -340,13 +419,12 @@ function walletHTML() {
       '<label>Your MoMo number <input type="tel" id="mdPhone" placeholder="05X XXX XXXX" required></label>' +
       '<label>Transaction ID / reference <input type="text" id="mdRef" placeholder="e.g. 12345678901" required></label>' +
       '<button class="btn gold big" type="submit">I Have Sent It — Confirm Deposit</button></form></div>'
-    : '<div class="card"><h3>Instant Deposit</h3>' +
-      '<p class="muted">Instant mobile money deposits launch with our payment processor integration. Until then, please use <b>Manual Deposit</b> — it is confirmed and credited by our team.</p></div>';
+    : momoPanelHTML();
   return '<h2>Wallet</h2>' +
     '<div class="card"><div class="muted">Balance</div><div class="bal">' + money(w.balance_ghs) + '</div>' +
     '<div class="muted">Confirmed deposits: ' + w.deposits_completed + ' of ' + w.deposits_required + ' needed to unlock withdrawals</div></div>' +
-    '<div class="wtabs"><button class="' + (manual ? 'on' : '') + '" data-wtab="manual">Manual Deposit</button>' +
-    '<button class="' + (manual ? '' : 'on') + '" data-wtab="instant">Instant Deposit</button></div>' +
+    '<div class="wtabs"><button class="' + (manual ? '' : 'on') + '" data-wtab="instant">Mobile Money</button>' +
+    '<button class="' + (manual ? 'on' : '') + '" data-wtab="manual">Manual transfer</button></div>' +
     depositPanel +
     withdrawCardHTML(w) +
     '<h3>Transactions</h3><div class="card">' + (tx || '<p class="empty">No transactions yet.</p>') + '</div>';
@@ -443,6 +521,7 @@ function render() {
   root.innerHTML = viewHTML();
   document.querySelectorAll('.navlink').forEach(b =>
     b.classList.toggle('active', b.dataset.nav === state.view));
+  if ($('#mmFeeLine')) syncMomoFee();
 }
 
 /* ---------- betslip ---------- */
@@ -624,6 +703,9 @@ document.addEventListener('click', e => {
   }
   const wt = e.target.closest('[data-wtab]');
   if (wt) { state.walletTab = wt.dataset.wtab; render(); return; }
+  if (e.target.closest('[data-momo-cancel]') || e.target.closest('[data-momo-reset]')) {
+    stopMomoPoll(); state.momo = null; render(); return;
+  }
   const cp = e.target.closest('[data-copy]');
   if (cp) {
     if (navigator.clipboard) navigator.clipboard.writeText(cp.dataset.copy).catch(() => {});
@@ -642,9 +724,57 @@ document.addEventListener('click', e => {
   }
 });
 
+document.addEventListener('input', e => {
+  if (e.target.id === 'mmAmt') syncMomoFee();
+  if (e.target.id === 'mmPhone') {
+    const n = detectNetworkJS(e.target.value);
+    const sel = $('#mmNet');
+    if (n && sel) sel.value = n;
+  }
+});
+
 document.addEventListener('submit', async e => {
   const id = e.target.id;
-  if (id === 'manualDepForm') {
+  if (id === 'momoForm') {
+    e.preventDefault();
+    const amt = parseFloat($('#mmAmt').value) || 0;
+    const phone = $('#mmPhone').value.trim();
+    try {
+      const d = await api('/wallet/deposit-momo', {
+        method: 'POST',
+        body: { amount_ghs: amt, phone, network: $('#mmNet').value }
+      });
+      if (d.next_action && d.next_action.type === 'submit_otp') {
+        state.momo = { phase: 'otp', reference: d.reference, phone, amount: amt };
+      } else if (d.status === 'unknown') {
+        state.momo = { phase: 'failed', message: d.detail || 'We could not confirm the payment request. If a prompt arrives, approve it once — do not pay twice.' };
+      } else {
+        state.momo = { phase: 'wait', reference: d.reference, phone, amount: amt, ussd: d.next_action && d.next_action.ussd_fallback };
+        startMomoPoll();
+      }
+      render();
+    } catch (err) {
+      if (err.code === 'provider_not_configured') {
+        state.momoOff = true;
+        render();
+        toast('Instant deposits are being switched on — please use Manual transfer.');
+      } else {
+        state.momo = { phase: 'failed', message: err.detail || 'The payment could not be started. Nothing was charged.' };
+        render();
+      }
+    }
+  } else if (id === 'momoOtpForm') {
+    e.preventDefault();
+    try {
+      await api('/wallet/deposit-otp', {
+        method: 'POST',
+        body: { reference: state.momo.reference, otp: $('#mmOtp').value.trim() }
+      });
+      state.momo.phase = 'wait';
+      startMomoPoll();
+      render();
+    } catch (err) { toast(err.detail || 'That code was not accepted — check it and try again.'); }
+  } else if (id === 'manualDepForm') {
     e.preventDefault();
     try {
       await api('/wallet/deposit-manual', {

@@ -14,6 +14,7 @@ const exactRoutes = {
   '/api/matches': require('./api/matches'),
   '/api/support': require('./api/support'),
   '/api/wallet': require('./api/wallet'),
+  '/api/payments/shinobipay-webhook': require('./api/payments/shinobipay-webhook'),
 };
 const groupRouters = {
   auth: require('./api/auth/[action]'),

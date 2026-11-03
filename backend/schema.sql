@@ -89,6 +89,34 @@ create table if not exists wallet_transactions (
 create index if not exists wallet_user_idx on wallet_transactions (user_id, created_at desc);
 create index if not exists wallet_status_idx on wallet_transactions (status, kind);
 
+-- ShinobiPay direct-push deposit attempts. One row per try; the wallet
+-- is credited (a completed wallet_transactions deposit row) only by the
+-- webhook handler after signature verification + re-verification.
+create table if not exists payment_attempts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users (id),
+  provider text not null default 'shinobipay',
+  reference text not null unique,
+  intent_id text,
+  client_secret text,
+  amount_ghs numeric(12, 2) not null,
+  amount_minor integer not null,
+  phone text,
+  network text,
+  status text not null default 'created',
+  fail_reason text,
+  last_sequence integer not null default 0,
+  created_at timestamptz not null default now(),
+  settled_at timestamptz
+);
+create index if not exists attempts_user_idx on payment_attempts (user_id, created_at desc);
+
+-- Webhook idempotency: one row per delivered event id.
+create table if not exists webhook_events (
+  event_id text primary key,
+  received_at timestamptz not null default now()
+);
+
 create table if not exists support_messages (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references users (id),

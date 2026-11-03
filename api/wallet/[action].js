@@ -1,6 +1,9 @@
 // Router for /api/wallet/* — one Vercel function for the whole group.
 const handlers = {
   'deposit-manual': require('../_handlers/wallet/deposit-manual'),
+  'deposit-momo': require('../_handlers/wallet/deposit-momo'),
+  'deposit-status': require('../_handlers/wallet/deposit-status'),
+  'deposit-otp': require('../_handlers/wallet/deposit-otp'),
   withdraw: require('../_handlers/wallet/withdraw'),
 };
 module.exports = (req, res) => {
