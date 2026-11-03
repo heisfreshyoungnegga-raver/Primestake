@@ -10,6 +10,7 @@ const state = {
   date: 'All',
   sport: 'Soccer',
   query: '',
+  filtersOpen: false,
   slip: new Map(), // key -> {matchId, matchLabel, league, market, pick, odd}
   user: null,
   token: localStorage.getItem('ps_token') || '',
@@ -250,13 +251,19 @@ function filtersHTML() {
     .join('');
   const row = (label, kind, list, cur) =>
     '<div class="frow2"><span class="flabel">' + label + '</span><div class="fchips">' + chips(list, kind, cur) + '</div></div>';
+  // The League/Market/When rows hide behind the Filters button
+  // (Prince's UX call, 2026-11-03): the open panel pushed the matches
+  // far down the page. Search stays visible at all times.
+  const sliders = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h9M19 7h1M4 17h3M13 17h7"/><circle cx="16" cy="7" r="2.3"/><circle cx="10" cy="17" r="2.3"/></svg>';
   return '<section class="filtercard">' +
-    '<div class="fcard-head"><h3>Find your match</h3><span class="fcard-hint">Filter by league, market and day</span></div>' +
+    '<div class="fcard-head"><h3>Find your match</h3>' +
+    '<button class="filterbtn' + (state.filtersOpen ? ' on' : '') + '" id="filterToggle" aria-expanded="' + !!state.filtersOpen + '">' + sliders + 'Filters<span class="fchev">' + (state.filtersOpen ? '▴' : '▾') + '</span></button></div>' +
     '<div class="searchbar"><span class="sicon">⌕</span><input id="searchBox" type="search" placeholder="Search teams or leagues..." value="' + esc(state.query) + '"></div>' +
+    '<div class="frows' + (state.filtersOpen ? '' : ' closed') + '">' +
     row('League', 'league', leagues(), state.league) +
     row('Market', 'market', MARKET_LIST, state.market) +
     row('When', 'date', DATES, state.date) +
-    '</section>';
+    '</div></section>';
 }
 // Home quick-access tiles (the icon row under the hero): each tile is a
 // shortcut into a real view or filter. Icons are small inline SVGs drawn
@@ -778,6 +785,20 @@ document.addEventListener('click', e => {
     if (state.view === 'support') loadSupport();
     return;
   }
+  if (e.target.closest('#filterToggle')) {
+    // Flip the rows in place (no re-render, so search text/focus and
+    // scroll stay put); state.filtersOpen keeps later renders in sync.
+    state.filtersOpen = !state.filtersOpen;
+    const rows = $('.frows');
+    if (rows) rows.classList.toggle('closed', !state.filtersOpen);
+    const fb = $('#filterToggle');
+    fb.classList.toggle('on', state.filtersOpen);
+    fb.setAttribute('aria-expanded', String(state.filtersOpen));
+    const ch = fb.querySelector('.fchev');
+    if (ch) ch.textContent = state.filtersOpen ? '▴' : '▾';
+    return;
+  }
+
   const chip = e.target.closest('[data-chip]');
   if (chip) {
     state[chip.dataset.chip] = chip.dataset.val;

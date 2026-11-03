@@ -694,6 +694,10 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 .fcard-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .fcard-head h3 { margin: 0; font-size: 16px; }
 .fcard-hint { color: var(--muted); font-size: 12px; }
+.filterbtn { display: inline-flex; align-items: center; gap: 7px; background: var(--header-bg); color: var(--header-ink); border: 0; border-radius: 999px; padding: 8px 14px; font-weight: 700; font-size: 13px; }
+.filterbtn svg { width: 16px; height: 16px; }
+.filterbtn.on { background: var(--accent); color: var(--accent-ink); }
+.frows.closed { display: none; }
 .filtercard .searchbar { position: relative; }
 .filtercard .searchbar input {
   width: 100%; padding: 12px 14px 12px 40px; font-size: 15px;
