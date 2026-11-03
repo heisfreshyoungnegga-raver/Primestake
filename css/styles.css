@@ -715,6 +715,27 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 .vbar i { display: block; height: 100%; background: var(--gold); }
 #verifyWrap .btn { width: 100%; margin-top: 10px; }
 .cashbar { border: 1px solid var(--gold); }
+/* Admin portals — mobile clarity pass (Prince, 2026-11-03 late):
+   the tab bar scrolls sideways instead of wrapping into rows, and
+   the featured-match form is four guided steps with big targets. */
+#adminRoot .wtabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+#adminRoot .wtabs::-webkit-scrollbar { display: none; }
+#adminRoot .wtabs button { flex: 0 0 auto; white-space: nowrap; padding: 10px 14px; }
+.fstep { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px; margin: 0; }
+.fstep legend { font-weight: 800; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--gold); padding: 0 6px; }
+.fstep .sm { font-size: 12.5px; margin: 8px 0 0; }
+.frow { display: flex; gap: 8px; align-items: flex-end; margin-top: 10px; }
+.frow label { flex: 1; }
+.frow .btn { height: 42px; min-width: 52px; font-size: 17px; }
+.chiprow { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.ffodds { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 10px; }
+.ffodds label { display: grid; gap: 5px; font-weight: 600; font-size: 13px; }
+.ffodds input { padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); font: inherit; background: var(--surface); color: var(--ink); width: 100%; }
+@media (max-width: 640px) {
+  #adminRoot .card { padding: 14px; }
+  .ffodds input { height: 48px; font-size: 16px; }
+  .fstep { padding: 12px 10px; }
+}
 .filtercard .searchbar { position: relative; }
 .filtercard .searchbar input {
   width: 100%; padding: 12px 14px 12px 40px; font-size: 15px;

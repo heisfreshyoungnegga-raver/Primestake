@@ -55,14 +55,38 @@ module.exports = guard(async (req, res) => {
   if (Number.isNaN(start.getTime())) return send(res, 400, { error: 'invalid_start_time' });
 
   let odds;
-  if (Number(o1) > 1 && Number(ox) > 1 && Number(o2) > 1) {
-    odds = expandOdds(Number(o1), Number(ox), Number(o2));
-  } else {
+  const entered = { o1: Number(o1), ox: Number(ox), o2: Number(o2) };
+  const OKEYS = ['o1', 'ox', 'o2'];
+  const have = OKEYS.filter(k => entered[k] > 1);
+  if (have.length === 3) {
+    odds = expandOdds(entered.o1, entered.ox, entered.o2);
+  } else if (have.length === 0) {
     const base = FAV_PROBS[fav] || FAV_PROBS.even;
     const jit = base.map(p => Math.max(0.08, p + (Math.random() * 0.06 - 0.03)));
     const sum = jit.reduce((a, b) => a + b, 0);
     const toOdds = p => Math.max(1.02, Math.round((0.94 / (p / sum)) * 100) / 100);
     odds = expandOdds(toOdds(jit[0]), toOdds(jit[1]), toOdds(jit[2]));
+  } else {
+    // Per-field completion (Prince's ask, 2026-11-03 late): the
+    // prices he typed stay exactly as typed; only the blanks are
+    // priced around them. Entered prices are de-margined at the
+    // house factor (0.94), the probability left over is split
+    // between the blank outcomes by the favourite profile, and each
+    // blank is priced back at the same factor.
+    const base = FAV_PROBS[fav] || FAV_PROBS.even;
+    const weight = { o1: base[0], ox: base[1], o2: base[2] };
+    let usedFair = 0;
+    for (const k of have) usedFair += 0.94 / entered[k];
+    const missing = OKEYS.filter(k => !have.includes(k));
+    const wSum = missing.reduce((a, k) => a + weight[k], 0) || 1;
+    const rest = Math.max(1 - usedFair, 0.02 * missing.length);
+    const line = {};
+    for (const k of OKEYS) {
+      if (have.includes(k)) { line[k] = entered[k]; continue; }
+      const p = Math.max(rest * (weight[k] / wSum), 0.005);
+      line[k] = Math.min(51, Math.max(1.02, Math.round((0.94 / p) * 100) / 100));
+    }
+    odds = expandOdds(line.o1, line.ox, line.o2);
   }
   if (!odds.o1) return send(res, 400, { error: 'valid_1x2_odds_required', detail: 'Home, draw and away odds must all be above 1.00.' });
 

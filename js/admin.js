@@ -251,21 +251,35 @@ function toLocalInput(d) {
 }
 function featuredFormHTML() {
   if (!superTools()) return '';
-  return '<div class="card"><h3>Create a featured match (super admin)</h3>' +
-    '<p class="muted">Type only what you care about — anything left blank is generated for you: random team names, auto odds from the favourite, and a goal schedule that matches the odds. The game goes live by itself at kickoff and settles on the final scheduled score.</p>' +
+  // Guided four-step layout (Prince's ask, 2026-11-03 late): the
+  // old flat list confused even him on mobile. Every step says in
+  // plain words what happens to a blank — it is created for you,
+  // including single odds prices: fill any of 1/X/2 and the rest
+  // are priced around yours.
+  return '<div class="card"><h3>➕ Create a featured match</h3>' +
+    '<p class="muted">Fill only what you want — <b>every blank is created for you</b> when you tap Create. The game goes live by itself at kickoff and settles itself at full time.</p>' +
     '<form id="featForm" class="stack">' +
-    '<label>League <input type="text" id="ffLeague" placeholder="PrimeStake Featured"></label>' +
-    '<label>Home team <input type="text" id="ffHome" placeholder="Leave blank for a random team"></label>' +
-    '<label>Away team <input type="text" id="ffAway" placeholder="Leave blank for a random team"></label>' +
-    '<div><button class="btn ghost sm" type="button" data-dice="ffHome">🎲 Home name</button> <button class="btn ghost sm" type="button" data-dice="ffAway">🎲 Away name</button></div>' +
-    '<label>Who is favourite? <select id="ffFav"><option value="even">Even match</option><option value="home">Home — slight favourite</option><option value="home_strong">Home — strong favourite</option><option value="away">Away — slight favourite</option><option value="away_strong">Away — strong favourite</option></select></label>' +
-    '<label>Kickoff <input type="datetime-local" id="ffStart"></label>' +
-    '<div><button class="btn ghost sm" type="button" data-kick="15">In 15 min</button> <button class="btn ghost sm" type="button" data-kick="60">In 1 hour</button> <button class="btn ghost sm" type="button" data-kick="tonight">Tonight 7 PM</button></div>' +
-    '<div class="oddsgrid">' +
-    '<label>1 (home) <input type="number" step="0.01" min="1.01" id="ff_o1" placeholder="Auto"></label>' +
-    '<label>X (draw) <input type="number" step="0.01" min="1.01" id="ff_ox" placeholder="Auto"></label>' +
-    '<label>2 (away) <input type="number" step="0.01" min="1.01" id="ff_o2" placeholder="Auto"></label></div>' +
-    '<label>Goal schedule — minute:side, comma separated (blank = auto) <input type="text" id="ffGoals" placeholder="Auto-generated to match the odds"></label>' +
+    '<fieldset class="fstep"><legend>1 · Teams</legend>' +
+    '<label>League <input type="text" id="ffLeague" placeholder="Blank = PrimeStake Featured"></label>' +
+    '<div class="frow"><label>Home team <input type="text" id="ffHome" placeholder="Blank = random team"></label>' +
+    '<button class="btn ghost" type="button" data-dice="ffHome">🎲</button></div>' +
+    '<div class="frow"><label>Away team <input type="text" id="ffAway" placeholder="Blank = random team"></label>' +
+    '<button class="btn ghost" type="button" data-dice="ffAway">🎲</button></div>' +
+    '<p class="muted sm">🎲 picks a random team name on the spot.</p></fieldset>' +
+    '<fieldset class="fstep"><legend>2 · Kickoff</legend>' +
+    '<label>Starts at <input type="datetime-local" id="ffStart"></label>' +
+    '<div class="chiprow"><button class="btn ghost sm" type="button" data-kick="15">In 15 min</button> <button class="btn ghost sm" type="button" data-kick="60">In 1 hour</button> <button class="btn ghost sm" type="button" data-kick="tonight">Tonight 7 PM</button></div>' +
+    '<p class="muted sm">Blank = starts in 30 minutes.</p></fieldset>' +
+    '<fieldset class="fstep"><legend>3 · Odds</legend>' +
+    '<label>If any price is auto, who is favourite? <select id="ffFav"><option value="even">Even match</option><option value="home">Home — slight favourite</option><option value="home_strong">Home — strong favourite</option><option value="away">Away — slight favourite</option><option value="away_strong">Away — strong favourite</option></select></label>' +
+    '<div class="ffodds">' +
+    '<label>Home win (1) <input type="number" step="0.01" min="1.01" id="ff_o1" placeholder="Auto"></label>' +
+    '<label>Draw (X) <input type="number" step="0.01" min="1.01" id="ff_ox" placeholder="Auto"></label>' +
+    '<label>Away win (2) <input type="number" step="0.01" min="1.01" id="ff_o2" placeholder="Auto"></label></div>' +
+    '<p class="muted sm">Fill any of them — even just one. The blanks are priced around the prices you set, and the full book (Double Chance, Over/Under, BTTS) is built from the final 1X2.</p></fieldset>' +
+    '<fieldset class="fstep"><legend>4 · Goals (optional)</legend>' +
+    '<label>Goal schedule <input type="text" id="ffGoals" placeholder="Blank = auto goals"></label>' +
+    '<p class="muted sm">Write minute:side pairs like 12:home, 40:away, 78:home. Blank = goals generated to match the odds (the favourite scores more).</p></fieldset>' +
     '<button class="btn gold big" type="submit">Create Featured Match</button></form></div>';
 }
 function supportHTML() {
@@ -556,7 +570,11 @@ document.addEventListener('submit', async e => {
     };
     if ($('#ffStart').value) body.starts_at = new Date($('#ffStart').value).toISOString();
     const o1 = Number($('#ff_o1').value), ox = Number($('#ff_ox').value), o2 = Number($('#ff_o2').value);
-    if (o1 > 1 && ox > 1 && o2 > 1) { body.o1 = o1; body.ox = ox; body.o2 = o2; }
+    // Any price he typed is sent — the server keeps typed prices
+    // and prices only the blanks around them.
+    if (o1 > 1) body.o1 = o1;
+    if (ox > 1) body.ox = ox;
+    if (o2 > 1) body.o2 = o2;
     const goalsText = $('#ffGoals').value.trim();
     if (goalsText) {
       body.goals = goalsText.split(',').map(x => x.trim()).filter(Boolean).map(part => {
