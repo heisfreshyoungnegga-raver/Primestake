@@ -7,7 +7,7 @@ module.exports = guard(async (req, res) => {
   if (req.method !== 'POST') return send(res, 405, { error: 'method_not_allowed' });
   const auth = requireAuth(req, res);
   if (!auth) return;
-  const { selections, stake_ghs } = await readBody(req);
+  const { selections, stake_ghs, booking_code } = await readBody(req);
   const stake = Number(stake_ghs);
   if (!Array.isArray(selections) || !selections.length) return send(res, 400, { error: 'no_selections' });
   if (selections.length > 20) return send(res, 400, { error: 'too_many_selections' });
@@ -38,11 +38,30 @@ module.exports = guard(async (req, res) => {
   totalOdds = Math.round(totalOdds * 1000) / 1000;
   const potential = Math.round(stake * totalOdds * 100) / 100;
 
+  // Booking code (optional): the slip being bet must be exactly the
+  // slip the code was minted for. The use is counted inside the money
+  // statement below, only when the bet actually lands.
+  let bookingCodeId = null;
+  if (booking_code) {
+    const bcRows = await sql('select * from booking_codes where code = $1',
+      [String(booking_code).replace(/\D/g, '').slice(0, 5)]);
+    const bc = bcRows[0];
+    if (!bc) return send(res, 400, { error: 'booking_code_not_found' });
+    if (bc.status !== 'active') return send(res, 400, { error: 'booking_code_revoked' });
+    if (bc.expires_at && new Date(bc.expires_at).getTime() <= Date.now()) return send(res, 400, { error: 'booking_code_expired' });
+    if (bc.max_uses && Number(bc.uses) >= Number(bc.max_uses)) return send(res, 400, { error: 'booking_code_exhausted' });
+    const want = (Array.isArray(bc.selections) ? bc.selections : []).map(s => s.match_id + '|' + s.market + '|' + s.pick).sort();
+    const got = clean.map(s => s.match_id + '|' + s.market + '|' + s.pick).sort();
+    if (want.length !== got.length || want.some((w, i) => w !== got[i])) return send(res, 400, { error: 'booking_code_mismatch' });
+    bookingCodeId = bc.id;
+  }
+
   // $1 user, $2 stake, $3 potential, $4 total odds; selections follow at $5+.
   const params = [auth.uid, stake, potential, totalOdds];
   const selParams = [];
   clean.forEach(s => selParams.push(s.match_id, s.market, s.pick, s.odds));
   const code = betCode();
+  const bcIdx = 5 + selParams.length;
   const rows = await sql(
     `with bal as (
        update users set balance_ghs = balance_ghs - $2
@@ -50,8 +69,8 @@ module.exports = guard(async (req, res) => {
        returning id
      ),
      bet as (
-       insert into bets (code, user_id, stake_ghs, total_odds, potential_ghs)
-       select '${code}', $1, $2, $4, $3 from bal
+       insert into bets (code, user_id, stake_ghs, total_odds, potential_ghs, booking_code_id)
+       select '${code}', $1, $2, $4, $3, $${bcIdx}::uuid from bal
        returning id, code
      ),
      sel as (
@@ -64,9 +83,14 @@ module.exports = guard(async (req, res) => {
        insert into wallet_transactions (user_id, kind, method, amount_ghs, status)
        select $1, 'bet_stake', 'Balance', -$2, 'completed' from bet
        returning id
+     ),
+     bcu as (
+       update booking_codes set uses = uses + 1
+       where id = $${bcIdx}::uuid and exists (select 1 from bet)
+       returning id
      )
      select (select count(*) from bal) as debited, (select code from bet) as code`,
-    [...params, ...selParams]
+    [...params, ...selParams, bookingCodeId]
   );
   if (!rows.length || Number(rows[0].debited) === 0) return send(res, 400, { error: 'insufficient_balance' });
   send(res, 201, { code: rows[0].code, total_odds: totalOdds, potential_ghs: potential });

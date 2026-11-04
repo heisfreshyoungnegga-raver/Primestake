@@ -21,6 +21,7 @@ const handlers = {
   payout: require('../_handlers/admin/payout'),
   'delete-user': require('../_handlers/admin/delete-user'),
   'deposit-proof': require('../_handlers/admin/deposit-proof'),
+  'booking-codes': require('../_handlers/admin/booking-codes'),
 };
 module.exports = (req, res) => {
   const action = (req.query && req.query.action) || String(req.url || '').split('?')[0].split('/').pop();

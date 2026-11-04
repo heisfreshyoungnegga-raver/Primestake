@@ -24,6 +24,7 @@ const state = {
   tab: 'dashboard',
   stats: null, queue: [], matches: [], users: [], support: [],
   settings: null, myDash: null, invites: [], lastInvite: '',
+  bookingCodes: [], bcBuilder: [], bcMatch: '', bcMarket: '1X2', bcDraft: {}, lastCode: '',
   offline: false,
 };
 const $ = (s, r = document) => r.querySelector(s);
@@ -92,7 +93,7 @@ function loginHTML() {
 }
 function tabsHTML() {
   const tabs = [['dashboard', 'Dashboard'], ['queue', 'Payout Queue'], ['matches', 'Matches'], ['users', 'Users'], ['support', 'Support'], ['earnings', 'My Earnings']];
-  if (superTools()) { tabs.splice(1, 0, ['guide', 'Setup Guide']); tabs.push(['control', 'Platform Control']); }
+  if (superTools()) { tabs.splice(1, 0, ['guide', 'Setup Guide']); tabs.push(['codes', 'Booking Codes']); tabs.push(['control', 'Platform Control']); }
   return '<div class="wtabs">' + tabs.map(([k, label]) =>
     '<button class="' + (state.tab === k ? 'on' : '') + '" data-atab="' + k + '">' + label + '</button>').join('') + '</div>';
 }
@@ -157,6 +158,7 @@ function matchesHTML() {
     '<div class="muted">' + (m.external_ref && String(m.external_ref).indexOf('espn:') === 0 ? 'ESPN · ' : m.external_ref && String(m.external_ref).indexOf('custom:') === 0 ? 'Featured · ' : 'Manual · ') + esc(m.league) + ' · ' + fmtDate(m.starts_at) + ' · ' + m.score_home + '-' + m.score_away + (m.minute != null ? ' · ' + m.minute + "'" : '') + '</div></div>' +
     chip(m.status) +
     '<span>' +
+    (superTools() ? '<button class="btn ghost sm" data-bc-for="' + m.id + '">🎟 Code</button> ' : '') +
     (m.status === 'upcoming' ? '<button class="btn gold sm" data-golive="' + m.id + '">Go Live</button> ' : '') +
     (m.status === 'live' ? '<button class="btn ghost sm" data-score="' + m.id + '">Update Score</button> ' : '') +
     (m.status !== 'finished'
@@ -258,6 +260,67 @@ function controlHTML() {
 // match what they see here to the real card in Platform Control, the
 // Payout Queue or Matches. Demo buttons are disabled on purpose: nothing
 // in this tab can change the platform.
+// Booking-code builder catalogue — market/pick labels match the
+// player app exactly (server validates with the same keyFor map).
+const BOOK_MARKETS = {
+  '1X2': ['1', 'X', '2'],
+  'Double Chance': ['1X', '12', 'X2'],
+  'Over/Under 0.5': ['Over 0.5', 'Under 0.5'],
+  'Over/Under 1.5': ['Over 1.5', 'Under 1.5'],
+  'Over/Under 2.5': ['Over 2.5', 'Under 2.5'],
+  'Over/Under 3.5': ['Over 3.5', 'Under 3.5'],
+  'Over/Under 4.5': ['Over 4.5', 'Under 4.5'],
+  'Both Teams To Score': ['Yes', 'No'],
+  'Correct Score': ['1-0', '2-0', '2-1', '3-0', '3-1', '3-2', '4-0', '4-1', '4-2', '5-0', '5-1', '0-0', '1-1', '2-2', '3-3', '0-1', '0-2', '1-2', '0-3', '1-3', '2-3', '0-4', '1-4', '2-4', '0-5', '1-5'],
+};
+function bcMatchLabel(id) {
+  const m = state.matches.find(x => x.id === id);
+  return m ? m.home_team + ' vs ' + m.away_team : 'Match';
+}
+function codesHTML() {
+  if (!superTools()) return tabsHTML() + '<div class="card"><p class="muted">Booking Codes live in the <a href="super-admin.html">Super Admin Portal</a> — super admins mint the codes and sell them to their users.</p></div>';
+  const d = state.bcDraft || {};
+  const open = state.matches.filter(m => m.status !== 'finished');
+  const matchOpts = open.map(m =>
+    '<option value="' + m.id + '"' + (state.bcMatch === m.id ? ' selected' : '') + '>' +
+    esc(m.home_team) + ' vs ' + esc(m.away_team) + ' · ' + esc(m.league) + ' · ' + fmtDate(m.starts_at) + '</option>').join('');
+  const market = state.bcMarket || '1X2';
+  const marketOpts = Object.keys(BOOK_MARKETS).map(k => '<option' + (market === k ? ' selected' : '') + '>' + k + '</option>').join('');
+  const pickOpts = BOOK_MARKETS[market].map(p => '<option>' + p + '</option>').join('');
+  const built = state.bcBuilder.map((b, i) =>
+    '<div class="txrow"><div><b>' + esc(b.label) + '</b><div class="muted">' + esc(b.market) + ' · ' + esc(b.pick) + '</div></div>' +
+    '<span><button class="btn ghost sm" data-bc-rm="' + i + '">Remove</button></span></div>').join('');
+  const codeRows = state.bookingCodes.map(c => {
+    const sels = (Array.isArray(c.selections) ? c.selections : []).map(s =>
+      '<div class="muted">' + esc(bcMatchLabel(s.match_id)) + ' — ' + esc(s.market) + ': <b>' + esc(s.pick) + '</b></div>').join('');
+    return '<div class="txrow"><div><div class="mannum" style="font-size:22px; letter-spacing:2px">' + esc(c.code) + '</div>' +
+      (c.label ? '<b>' + esc(c.label) + '</b>' : '') + sels +
+      '<div class="muted">Used ' + c.uses + (c.max_uses ? ' of ' + c.max_uses : ' (unlimited)') + ' · ' + c.bets_placed + ' bet(s) placed' +
+      (c.price_ghs ? ' · sold at ' + money(c.price_ghs) : '') +
+      (c.expires_at ? ' · expires ' + fmtDate(c.expires_at) : ' · no expiry') +
+      ' · by ' + esc(c.creator_phone || c.creator_email || '') + '</div></div>' +
+      chip(c.status) +
+      '<span><button class="btn gold sm" data-copy="' + esc(c.code) + '">Copy Code</button> ' +
+      (c.status === 'active' ? '<button class="btn ghost sm" data-bc-revoke="' + c.id + '">Revoke</button>' : '') + '</span></div>';
+  }).join('');
+  return tabsHTML() +
+    '<div class="card"><h3>🎟 Create a booking code</h3>' +
+    '<p class="muted">Build the slip, tap Generate, and you get a <b>5-digit code</b> you can sell or share. A player enters the code on the Booking Codes page and your exact selections land on their betslip. A use is only counted when they actually place the bet.</p>' +
+    '<div class="stack">' +
+    '<label>Match <select id="bcMatch">' + (matchOpts || '<option value="">No open matches</option>') + '</select></label>' +
+    '<div class="frow"><label>Market <select id="bcMarket">' + marketOpts + '</select></label>' +
+    '<label>Pick <select id="bcPick">' + pickOpts + '</select></label></div>' +
+    '<button class="btn ghost big" data-bc-add>Add Selection</button>' +
+    (built || '<p class="empty">No selections yet — add at least one.</p>') +
+    '<label>Label (optional) <input type="text" id="bcLabel" placeholder="e.g. Saturday sure slip" value="' + esc(d.label || '') + '"></label>' +
+    '<div class="frow"><label>Price you sell it at, GHS (optional) <input type="number" step="0.01" min="0" id="bcPrice" placeholder="Blank = free" value="' + esc(d.price || '') + '"></label>' +
+    '<label>Max uses (optional) <input type="number" step="1" min="1" id="bcMaxUses" placeholder="Blank = unlimited" value="' + esc(d.max || '') + '"></label>' +
+    '<label>Expires in hours (optional) <input type="number" step="1" min="1" id="bcExp" placeholder="Blank = never" value="' + esc(d.exp || '') + '"></label></div>' +
+    '<button class="btn gold big" data-bc-gen>Generate Booking Code</button>' +
+    (state.lastCode ? '<div class="manualbox"><div class="mannum" style="font-size:26px; letter-spacing:3px">' + esc(state.lastCode) + '</div><button class="btn gold" data-copy="' + esc(state.lastCode) + '">Copy Code</button></div>' : '') +
+    '</div></div>' +
+    '<div class="card"><h3>Your booking codes</h3>' + (codeRows || '<p class="empty">No codes yet.</p>') + '</div>';
+}
 function guideHTML() {
   if (!superTools()) return tabsHTML() + '<div class="card"><p class="muted">The Setup Guide lives in the <a href="super-admin.html">Super Admin Portal</a>.</p></div>';
   const box = (name, inner) =>
@@ -300,7 +363,10 @@ function guideHTML() {
     box('7 · FEATURED MATCH — Matches tab',
       '<div class="txrow"><div><b>Accra Falcons vs Kumasi Royals</b><div class="muted">Featured · PrimeStake Featured · kicks off in 30 mins</div></div>' + chip('upcoming') + '</div>' +
       '<p class="muted">Three ways to fill the form: leave everything blank and the system invents teams, odds and the goal schedule; type only the two team names (tap the 🎲 dice for random names) and it fills the rest; or type your own odds and goals — what you type is always kept, only blanks are generated.</p>') +
-    box('8 · SAFETY RULES — read once, follow always',
+    box('8 · BOOKING CODES — Booking Codes tab',
+      '<div class="txrow"><div><div class="mannum" style="font-size:20px; letter-spacing:2px">48392</div><div class="muted">Saturday sure slip · Used 3 of 10 · sold at GHS 20.00</div></div>' + dBtn('Copy Code', true) + '</div>' +
+      '<p class="muted">Mint a <b>5-digit code</b> for any slip you build — start from the 🎟 Code button on a match you just created. Sell the code to your users; when a player loads it, your exact selections land on their slip, and a use is counted only when they place the bet. Set max uses and an expiry so the code dies after matchday, and Revoke any code instantly.</p>') +
+    box('9 · SAFETY RULES — read once, follow always',
       '<ol class="gsteps">' +
       '<li>A super admin invite link is a master key. Never post one publicly.</li>' +
       '<li>Never confirm a deposit you have not seen proof for.</li>' +
@@ -387,7 +453,8 @@ function render() {
     state.tab === 'matches' ? matchesHTML() :
     state.tab === 'users' ? usersHTML() :
     state.tab === 'earnings' ? earningsHTML() :
-    state.tab === 'control' ? controlHTML() : supportHTML();
+    state.tab === 'control' ? controlHTML() :
+    state.tab === 'codes' ? codesHTML() : supportHTML();
 }
 async function loadAll() {
   try {
@@ -396,12 +463,14 @@ async function loadAll() {
       api('/admin/settings').catch(() => null), api('/admin/my-dashboard').catch(() => null)
     ];
     if (superTools()) jobs.push(api('/admin/invite-admin').catch(() => null));
-    const [stats, queue, matches, users, support, settings, myDash, invites] = await Promise.all(jobs);
+    if (superTools()) jobs.push(api('/admin/booking-codes').catch(() => null));
+    const [stats, queue, matches, users, support, settings, myDash, invites, bCodes] = await Promise.all(jobs);
     state.stats = stats.stats; state.queue = queue.queue; state.matches = matches.matches;
     state.users = users.users; state.support = support.messages;
     if (settings) state.settings = settings.settings;
     if (myDash) state.myDash = myDash;
     if (invites) state.invites = invites.invites || [];
+    if (bCodes) state.bookingCodes = bCodes.codes || [];
   } catch (e) { toast(e.message); }
   render();
 }
@@ -425,6 +494,59 @@ document.addEventListener('click', async e => {
   if (copyBtn) {
     if (navigator.clipboard) navigator.clipboard.writeText(copyBtn.dataset.copy).catch(() => {});
     toast('Copied: ' + copyBtn.dataset.copy);
+    return;
+  }
+  const bcForBtn = e.target.closest('[data-bc-for]');
+  if (bcForBtn) {
+    state.bcMatch = bcForBtn.dataset.bcFor; state.bcBuilder = []; state.lastCode = ''; state.tab = 'codes';
+    render();
+    toast('Build this match\'s code: choose market + pick, Add Selection, then Generate.');
+    return;
+  }
+  const bcAddBtn = e.target.closest('[data-bc-add]');
+  if (bcAddBtn) {
+    const mId = ($('#bcMatch') || {}).value;
+    const market = ($('#bcMarket') || {}).value;
+    const pick = ($('#bcPick') || {}).value;
+    if (!mId) { toast('No open match to build on.'); return; }
+    if (state.bcBuilder.some(b => b.matchId === mId)) { toast('One selection per match — remove the existing one first.'); return; }
+    state.bcMatch = mId; state.bcMarket = market;
+    state.bcBuilder.push({ matchId: mId, market, pick, label: bcMatchLabel(mId) });
+    render();
+    return;
+  }
+  const bcRmBtn = e.target.closest('[data-bc-rm]');
+  if (bcRmBtn) { state.bcBuilder.splice(Number(bcRmBtn.dataset.bcRm), 1); render(); return; }
+  const bcGenBtn = e.target.closest('[data-bc-gen]');
+  if (bcGenBtn) {
+    if (!state.bcBuilder.length) { toast('Add at least one selection first.'); return; }
+    bcGenBtn.disabled = true; bcGenBtn.textContent = 'Generating…';
+    try {
+      const data = await api('/admin/booking-codes', {
+        method: 'POST',
+        body: {
+          selections: state.bcBuilder.map(b => ({ match_id: b.matchId, market: b.market, pick: b.pick })),
+          label: state.bcDraft.label || undefined,
+          price_ghs: Number(state.bcDraft.price) || undefined,
+          max_uses: Number(state.bcDraft.max) || undefined,
+          expires_hours: Number(state.bcDraft.exp) || undefined,
+        }
+      });
+      state.lastCode = data.booking_code.code;
+      state.bcBuilder = []; state.bcDraft = {};
+      toast('Booking code generated: ' + state.lastCode);
+      loadAll();
+    } catch (err) { toast(err.message); bcGenBtn.disabled = false; bcGenBtn.textContent = 'Generate Booking Code'; }
+    return;
+  }
+  const bcRevokeBtn = e.target.closest('[data-bc-revoke]');
+  if (bcRevokeBtn) {
+    if (!confirm('Revoke this booking code? Players will no longer be able to load or bet it.')) return;
+    try {
+      await api('/admin/booking-codes', { method: 'POST', body: { revoke_id: bcRevokeBtn.dataset.bcRevoke } });
+      toast('Code revoked.');
+      loadAll();
+    } catch (err) { toast(err.message); }
     return;
   }
   const diceBtn = e.target.closest('[data-dice]');
@@ -599,6 +721,15 @@ document.addEventListener('click', async e => {
   }
 });
 
+document.addEventListener('change', e => {
+  if (e.target.id === 'bcMatch') { state.bcMatch = e.target.value; render(); }
+  else if (e.target.id === 'bcMarket') { state.bcMarket = e.target.value; render(); }
+});
+document.addEventListener('input', e => {
+  const map = { bcLabel: 'label', bcPrice: 'price', bcMaxUses: 'max', bcExp: 'exp' };
+  if (map[e.target.id]) state.bcDraft[map[e.target.id]] = e.target.value;
+});
+
 document.addEventListener('submit', async e => {
   if (e.target.id === 'adminLogin') {
     e.preventDefault();
@@ -672,7 +803,10 @@ document.addEventListener('submit', async e => {
     }
     try {
       const data = await api('/admin/create-match', { method: 'POST', body });
-      toast('Created: ' + data.match.home_team + ' vs ' + data.match.away_team + ' — it plays by the clock from kickoff.');
+      // Prince's flow (2026-11-04): after creating his match, the super
+      // admin goes straight to minting its booking code.
+      state.bcMatch = data.match.id; state.bcBuilder = []; state.lastCode = ''; state.tab = 'codes';
+      toast('Created: ' + data.match.home_team + ' vs ' + data.match.away_team + ' — now build its booking code.');
       loadAll();
     } catch (err) { toast(err.message); }
   } else if (e.target.id === 'matchForm') {
@@ -681,7 +815,7 @@ document.addEventListener('submit', async e => {
     const odds = {};
     keys.forEach(k => { const v = Number($('#mf_' + k).value); if (v > 1) odds[k] = v; });
     try {
-      await api('/admin/matches', {
+      const data = await api('/admin/matches', {
         method: 'POST',
         body: {
           league: $('#mfLeague').value.trim(), home_team: $('#mfHome').value.trim(),
@@ -689,7 +823,12 @@ document.addEventListener('submit', async e => {
           starts_at: new Date($('#mfStart').value).toISOString(), odds
         }
       });
-      toast('Match added.');
+      if (superTools() && data.match) {
+        state.bcMatch = data.match.id; state.bcBuilder = []; state.lastCode = ''; state.tab = 'codes';
+        toast('Match added — now build its booking code.');
+      } else {
+        toast('Match added.');
+      }
       loadAll();
     } catch (err) { toast(err.message); }
   }

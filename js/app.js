@@ -29,6 +29,7 @@ const state = {
   momoOff: false,
   verifyResult: '',
   slipCode: '',
+  loadedCode: '', loadedCodeInfo: null,
   supportMsgs: [],
 };
 
@@ -111,6 +112,16 @@ function errToast(e, fallback) {
     one_selection_per_match: 'Only one selection per match on a slip.',
     market_unavailable: 'One of those markets is not available right now.',
     ticket_not_found: 'No ticket found with that code.',
+    code_must_be_5_digits: 'Booking codes are exactly 5 digits.',
+    code_not_found: 'That booking code does not exist.',
+    code_revoked: 'That booking code has been revoked.',
+    code_expired: 'That booking code has expired.',
+    code_exhausted: 'That booking code has reached its use limit.',
+    booking_code_not_found: 'That booking code does not exist.',
+    booking_code_revoked: 'That booking code has been revoked.',
+    booking_code_expired: 'That booking code has expired.',
+    booking_code_exhausted: 'That booking code has reached its use limit.',
+    booking_code_mismatch: 'Your slip no longer matches the booking code — load the code again to bet it.',
     transaction_id_required: 'Enter the MoMo transaction ID from your confirmation.',
   };
   toast(map[e.code] || fallback || ('Something went wrong: ' + (e.detail || e.code || 'error')));
@@ -688,13 +699,24 @@ function verifyHTML() {
     '<div id="verifyOut">' + state.verifyResult + '</div>';
 }
 function bookingHTML() {
+  const lc = state.loadedCodeInfo;
   return '<h2>Booking Codes</h2>' +
+    '<div class="card"><h3>Load a booking code</h3>' +
+    '<p class="muted">Bought a code from the super admin? Enter the 5-digit code and his exact slip lands on your betslip at current odds.</p>' +
+    '<form id="bookingCodeForm" class="stack">' +
+    '<label>Booking code <input type="text" id="bkCode" inputmode="numeric" maxlength="5" placeholder="5-digit code" required></label>' +
+    '<button class="btn gold big" type="submit">Load Booking Code</button></form>' +
+    (state.loadedCode ? '<p class="bigcode">' + esc(state.loadedCode) + '</p>' +
+      '<p class="muted">Your slip is tied to booking code ' + esc(state.loadedCode) +
+      (lc && lc.label ? ' — “' + esc(lc.label) + '”' : '') +
+      (lc && lc.price_ghs ? ' · sold at ' + money(lc.price_ghs) : '') +
+      '. Bet it exactly as loaded — changing a selection unties it from the code.</p>' : '') + '</div>' +
     '<div class="card"><h3>Generate from your betslip</h3>' +
-    '<p class="muted">A slip code packs your current selections into one code that recreates them on any device. ' +
+    '<p class="muted">A personal slip code packs your current selections into one code that recreates them on any device. ' +
     (state.slip.size ? state.slip.size + ' selection(s) on your slip.' : 'Your slip is empty — add odds first.') + '</p>' +
     '<button class="btn gold big" data-gen-code>Generate Slip Code</button>' +
     (state.slipCode ? '<p class="bigcode">' + esc(state.slipCode) + '</p>' : '') + '</div>' +
-    '<div class="card"><h3>Load a code</h3><form id="bookingLoadForm" class="stack">' +
+    '<div class="card"><h3>Load a personal slip code</h3><form id="bookingLoadForm" class="stack">' +
     '<label>Slip code <input type="text" id="loadCode" placeholder="Paste a slip code" required></label>' +
     '<button class="btn gold big" type="submit">Load Code</button></form></div>';
 }
@@ -810,8 +832,9 @@ async function placeBet() {
   btn.disabled = true; btn.textContent = 'Placing…';
   try {
     const selections = [...state.slip.values()].map(s => ({ match_id: s.matchId, market: s.market, pick: s.pick }));
-    const data = await api('/bets/place', { method: 'POST', body: { selections, stake_ghs: stake } });
+    const data = await api('/bets/place', { method: 'POST', body: { selections, stake_ghs: stake, booking_code: state.loadedCode || undefined } });
     state.slip.clear();
+    state.loadedCode = ''; state.loadedCodeInfo = null;
     renderSlip();
     closeSlip();
     toast('Bet placed — your ticket code is ' + data.code);
@@ -956,6 +979,8 @@ document.addEventListener('click', e => {
         league: m.league, market, pick, odd: o.odd,
       });
     }
+    // Any manual change unties the slip from a loaded booking code.
+    state.loadedCode = ''; state.loadedCodeInfo = null;
     renderSlip();
     render();
     return;
@@ -1009,7 +1034,7 @@ document.addEventListener('click', e => {
     return;
   }
   const rm = e.target.closest('[data-rm]');
-  if (rm) { state.slip.delete(rm.dataset.rm); renderSlip(); render(); return; }
+  if (rm) { state.slip.delete(rm.dataset.rm); state.loadedCode = ''; state.loadedCodeInfo = null; renderSlip(); render(); return; }
   const amtChip = e.target.closest('[data-amt]');
   if (amtChip) {
     const inp = $('#mmAmt');
@@ -1166,6 +1191,36 @@ document.addEventListener('submit', async e => {
       state.verifyResult = '<div class="card"><b>Ticket not found</b><p class="muted">No bet carries the code ' + esc(code) + '.</p></div>';
     }
     render();
+  } else if (id === 'bookingCodeForm') {
+    e.preventDefault();
+    const code = $('#bkCode').value.replace(/\D/g, '').slice(0, 5);
+    if (code.length !== 5) { toast('Booking codes are exactly 5 digits.'); return; }
+    if (!state.user) { openAuth('login'); toast('Log in to load a booking code'); return; }
+    try {
+      const data = await api('/bets/booking-resolve', { method: 'POST', body: { code } });
+      state.slip.clear();
+      let added = 0, skipped = 0;
+      data.selections.forEach(s => {
+        if (!s.available) { skipped++; return; }
+        state.slip.set(slipKey(s.match_id, s.market, s.pick), {
+          matchId: s.match_id, matchLabel: s.home_team + ' vs ' + s.away_team,
+          league: s.league, market: s.market, pick: s.pick, odd: s.odd,
+        });
+        added++;
+      });
+      if (!added) {
+        state.loadedCode = ''; state.loadedCodeInfo = null;
+        toast('Every match on that code has finished — the slip cannot be loaded.');
+        render();
+        return;
+      }
+      state.loadedCode = data.code;
+      state.loadedCodeInfo = { label: data.label, price_ghs: data.price_ghs };
+      renderSlip();
+      render();
+      toast('Booking code loaded — ' + added + ' selection(s) at current odds' + (skipped ? ', ' + skipped + ' unavailable and skipped' : ''));
+      openSlip();
+    } catch (err) { errToast(err, 'That booking code could not be loaded.'); }
   } else if (id === 'bookingLoadForm') {
     e.preventDefault();
     const raw = $('#loadCode').value.trim();
@@ -1173,6 +1228,7 @@ document.addEventListener('submit', async e => {
       const payload = JSON.parse(decodeURIComponent(escape(atob(raw.replace(/-/g, '+').replace(/_/g, '/')))));
       let added = 0;
       state.slip.clear();
+      state.loadedCode = ''; state.loadedCodeInfo = null;
       payload.forEach(item => {
         const m = state.matches.find(x => x.id === item.m);
         if (!m) return;

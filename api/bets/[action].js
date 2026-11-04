@@ -4,6 +4,7 @@ const handlers = {
   mine: require('../_handlers/bets/mine'),
   verify: require('../_handlers/bets/verify'),
   cashout: require('../_handlers/bets/cashout'),
+  'booking-resolve': require('../_handlers/bets/booking-resolve'),
 };
 module.exports = (req, res) => {
   const action = (req.query && req.query.action) || String(req.url || '').split('?')[0].split('/').pop();
