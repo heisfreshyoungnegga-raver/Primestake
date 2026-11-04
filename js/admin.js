@@ -154,7 +154,17 @@ function matchesHTML() {
     '<span>' +
     (m.status === 'upcoming' ? '<button class="btn gold sm" data-golive="' + m.id + '">Go Live</button> ' : '') +
     (m.status === 'live' ? '<button class="btn ghost sm" data-score="' + m.id + '">Update Score</button> ' : '') +
-    (m.status !== 'finished' ? '<button class="btn ghost sm" data-settle="' + m.id + '">Settle</button>' : '') +
+    (m.status !== 'finished'
+      ? (superTools()
+        // Super admins set the correct/final score right in the row:
+        // two small boxes (home, away) with the box name above them.
+        ? '<span class="scorebox"><span class="sb-name">Final score · Home – Away</span>' +
+          '<span class="sb-row"><input type="number" min="0" max="30" id="fsh-' + m.id + '" value="' + (m.score_home || 0) + '" aria-label="Home goals">' +
+          '<span class="muted">–</span>' +
+          '<input type="number" min="0" max="30" id="fsa-' + m.id + '" value="' + (m.score_away || 0) + '" aria-label="Away goals">' +
+          '<button class="btn gold sm" data-setscore="' + m.id + '">Set Final Score</button></span></span>'
+        : '<button class="btn ghost sm" data-settle="' + m.id + '">Settle</button>')
+      : '') +
     '</span></div>').join('');
   return tabsHTML() + featuredFormHTML() + form + '<div class="card"><h3>Matches</h3>' + (rows || '<p class="empty">No matches yet.</p>') + '</div>';
 }
@@ -551,6 +561,20 @@ document.addEventListener('click', async e => {
     try {
       await api('/admin/matches', { method: 'PATCH', body: { id: m.id, score_home: Number(sh), score_away: Number(sa), minute: min === null ? undefined : Number(min) } });
       toast('Score updated.'); loadAll();
+    } catch (err) { toast(err.message); }
+    return;
+  }
+  const setScoreBtn = e.target.closest('[data-setscore]');
+  if (setScoreBtn) {
+    const id = setScoreBtn.dataset.setscore;
+    const m = state.matches.find(x => x.id === id);
+    const sh = Number(($('#fsh-' + id) || {}).value), sa = Number(($('#fsa-' + id) || {}).value);
+    if (!(sh >= 0) || !(sa >= 0)) { toast('Enter both the home and away scores first.'); return; }
+    if (!confirm('Set the final score for ' + (m ? m.home_team + ' vs ' + m.away_team : 'this match') + ' to ' + sh + '–' + sa + ' and settle it? Winners will be paid.')) return;
+    try {
+      const data = await api('/admin/settle', { method: 'POST', body: { match_id: id, score_home: sh, score_away: sa } });
+      toast('Settled ' + sh + '–' + sa + ': ' + data.selections_scored + ' selections, ' + data.bets_won + ' bets won, ' + data.bets_lost + ' lost.');
+      loadAll();
     } catch (err) { toast(err.message); }
     return;
   }
