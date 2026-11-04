@@ -131,11 +131,16 @@ function queueHTML(compact) {
     '<div class="muted">' + fmtDate(q.created_at) + ' · ' + esc(q.method || '') + (q.external_ref ? ' · Ref ' + esc(q.external_ref) : '') + '</div></div>' +
     '<div>' + money(q.amount_ghs) + '</div>' +
     '<span>' + (q.has_proof ? '<button class="btn ghost sm" data-proof="' + q.id + '">Screenshot</button> ' : '') +
-    '<button class="btn gold sm" data-confirm="' + q.id + '">Confirm</button> ' +
-    '<button class="btn ghost sm" data-reject="' + q.id + '">Reject</button></span></div>').join('');
+    // Withdrawals are decided by the super admin only (Prince's rule,
+    // 2026-11-04) — everyone else sees the row but no action buttons.
+    // The API enforces the same rule, so this is presentation only.
+    ((q.kind === 'withdrawal' && !superTools())
+      ? '<span class="muted">Super admin only</span>'
+      : '<button class="btn gold sm" data-confirm="' + q.id + '">Confirm</button> ' +
+        '<button class="btn ghost sm" data-reject="' + q.id + '">Reject</button>') + '</span></div>').join('');
   return '<div class="card"><h3>Deposits &amp; withdrawals queue</h3>' +
     (rows || '<p class="empty">Nothing waiting for review.</p>') + '</div>' +
-    (compact ? '' : '<p class="muted">Confirming a deposit credits the player and counts it toward their withdrawal unlock. Rejecting a withdrawal refunds the held amount.</p>');
+    (compact ? '' : '<p class="muted">Confirming a deposit credits the player and counts it toward their withdrawal unlock. Rejecting a withdrawal refunds the held amount. Withdrawal decisions are super-admin only.</p>');
 }
 function matchesHTML() {
   const form = '<div class="card"><h3>Add a match</h3><form id="matchForm" class="stack">' +

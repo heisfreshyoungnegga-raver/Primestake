@@ -15,6 +15,12 @@ module.exports = guard(async (req, res) => {
   const pending = await sql('select user_id, kind, amount_ghs from wallet_transactions where id = $1 and status = $2', [id, 'pending']);
   if (!pending.length) return send(res, 404, { error: 'pending_transaction_not_found' });
   const txn = pending[0];
+  // Withdrawal approvals are super-admin only (Prince's rule,
+  // 2026-11-04): a regular admin can confirm deposits, but only the
+  // super admin can approve money leaving the platform.
+  if (txn.kind === 'withdrawal' && auth.role !== 'super_admin') {
+    return send(res, 403, { error: 'super_admin_only', detail: 'Only the super admin can approve withdrawals.' });
+  }
   if (txn.kind === 'withdrawal') {
     const settings = await getSettings(['payouts_frozen']);
     if (settings.payouts_frozen === '1') {
