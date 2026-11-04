@@ -92,7 +92,7 @@ function loginHTML() {
 }
 function tabsHTML() {
   const tabs = [['dashboard', 'Dashboard'], ['queue', 'Payout Queue'], ['matches', 'Matches'], ['users', 'Users'], ['support', 'Support'], ['earnings', 'My Earnings']];
-  if (superTools()) tabs.push(['control', 'Platform Control']);
+  if (superTools()) { tabs.splice(1, 0, ['guide', 'Setup Guide']); tabs.push(['control', 'Platform Control']); }
   return '<div class="wtabs">' + tabs.map(([k, label]) =>
     '<button class="' + (state.tab === k ? 'on' : '') + '" data-atab="' + k + '">' + label + '</button>').join('') + '</div>';
 }
@@ -121,7 +121,9 @@ function dashboardHTML() {
     ['Pending deposits', s.pending_deposits], ['Pending withdrawals', s.pending_withdrawals],
     ['Open support', s.open_support],
   ].map(([l, v]) => '<div class="stat"><div class="muted">' + l + '</div><div class="stat-v">' + v + '</div></div>').join('') : '<p class="muted">Loading…</p>';
-  return tabsHTML() + '<div class="stats">' + grid + '</div>' + espnHTML() + queueHTML(true);
+  return tabsHTML() +
+    (superTools() ? '<div class="card"><h3>New here?</h3><p class="muted">The Setup Guide tab walks a new super admin through every job in this portal, with a named demo box for each card.</p><button class="btn gold" data-atab="guide">Open the Setup Guide</button></div>' : '') +
+    '<div class="stats">' + grid + '</div>' + espnHTML() + queueHTML(true);
 }
 function queueHTML(compact) {
   const rows = state.queue.map(q =>
@@ -236,6 +238,62 @@ function controlHTML() {
     '<div class="card"><h3>Pending admin verifications</h3>' + (pendingRows || '<p class="empty">No admins waiting for verification.</p>') + '</div>' +
     '<div class="card"><h3>Referral commissions</h3>' + (commRows || '<p class="empty">No referral earnings yet.</p>') + '</div>';
 }
+// Setup Guide — super-admin portal only. Every demo below is a boxed
+// example with its box name labelled above it, so a new super admin can
+// match what they see here to the real card in Platform Control, the
+// Payout Queue or Matches. Demo buttons are disabled on purpose: nothing
+// in this tab can change the platform.
+function guideHTML() {
+  if (!superTools()) return tabsHTML() + '<div class="card"><p class="muted">The Setup Guide lives in the <a href="super-admin.html">Super Admin Portal</a>.</p></div>';
+  const box = (name, inner) =>
+    '<div class="gwrap"><div class="gname">' + name + '</div>' +
+    '<div class="gbox"><span class="demotag">DEMO EXAMPLE</span>' + inner + '</div></div>';
+  const dBtn = (label, gold) => '<button class="btn ' + (gold ? 'gold' : 'ghost') + ' sm" disabled>' + label + '</button>';
+  return tabsHTML() +
+    '<div class="card"><h3>Welcome, Super Admin</h3>' +
+    '<p class="muted">This portal is the master key to PrimeStake: switches, commission rates, admin invites, role changes and balance edits live here and nowhere else. Work through the boxes below once and you know the whole job. Each box is named above it, exactly like the real card it teaches. Everything inside a box is a demo — the buttons do nothing.</p></div>' +
+    '<div class="ggrid">' +
+    box('1 · FIRST DAY CHECKLIST',
+      '<ol class="gsteps">' +
+      '<li>Open <b>Platform Control</b> and check the two switches (box 2).</li>' +
+      '<li>Set the commission rates so your admins actually earn (box 3).</li>' +
+      '<li>On <b>Dashboard</b>, run <b>Sync From ESPN</b> so today\'s matches load.</li>' +
+      '<li>Invite your admins with an invite link (box 4), then verify them (box 5).</li>' +
+      '<li>Check the <b>Payout Queue</b> every day and clear what is waiting (box 6).</li>' +
+      '</ol>') +
+    box('2 · SWITCHES — Platform Control',
+      '<div class="txrow"><div><b>ShinobiPay gateway</b><div class="muted">ON = instant MoMo deposits work. OFF = manual transfer only.</div></div>' + dBtn('ON', true) + '</div>' +
+      '<div class="txrow"><div><b>Payouts</b><div class="muted">OPEN = players can withdraw. FROZEN = withdrawals and queue confirmations stop.</div></div>' + dBtn('OPEN', true) + '</div>' +
+      '<p class="muted">Find the real switches at the top of the <b>Platform Control</b> tab.</p>') +
+    box('3 · COMMISSION RATES — Platform Control',
+      '<div class="txrow"><div><b>Referral commission %</b><div class="muted">Paid to the admin who invited a player, on every deposit that player makes.</div></div><div><b>5%</b></div></div>' +
+      '<div class="txrow"><div><b>User cashback %</b><div class="muted">Credited back to the player on their own deposit.</div></div><div><b>0%</b></div></div>' +
+      '<p class="muted">Worked example: a player deposits <b>GHS 200.00</b> → the inviting admin earns <b>GHS 10.00</b> at 5%. At 0% nobody earns anything.</p>') +
+    box('4 · ADMIN INVITES — Platform Control',
+      '<p class="muted">A one-time link that expires. Share it privately with one person only.</p>' +
+      '<div class="manualbox"><div class="mannum" style="font-size:13px; letter-spacing:0; word-break:break-all">https://primesstake.site/?admin_invite=DEMO-LINK-EXAMPLE</div></div>' +
+      '<div class="txrow"><div><b>Admin link</b><div class="muted">Creates a <b>pending</b> admin — you verify them in box 5 before they can work.</div></div></div>' +
+      '<div class="txrow"><div><b>Super admin link</b><div class="muted">Creates an <b>active</b> super admin at once. Same powers as you — share with extreme care.</div></div></div>') +
+    box('5 · PENDING ADMIN VERIFICATIONS — Platform Control',
+      '<div class="txrow"><div><b>0244 000 000</b><div class="muted">Demo Admin · applied today</div></div>' +
+      '<span>' + dBtn('Verify Admin', true) + ' ' + dBtn('Remove') + '</span></div>' +
+      '<p class="muted">Only verify people you personally invited. <b>Remove</b> deletes the pending account.</p>') +
+    box('6 · PAYOUT QUEUE — Payout Queue tab',
+      '<div class="txrow"><div><b>deposit · 0244 000 000</b><div class="muted">today · MoMo manual · Ref DEMO123</div></div>' +
+      '<div>GHS 150.00</div><span>' + dBtn('Screenshot') + ' ' + dBtn('Confirm', true) + ' ' + dBtn('Reject') + '</span></div>' +
+      '<p class="muted">For a manual deposit, open the <b>Screenshot</b> and match the amount and reference before you <b>Confirm</b> — confirming credits the player and counts toward their 6 deposits to unlock withdrawals. <b>Reject</b> on a withdrawal refunds the held amount.</p>') +
+    box('7 · FEATURED MATCH — Matches tab',
+      '<div class="txrow"><div><b>Accra Falcons vs Kumasi Royals</b><div class="muted">Featured · PrimeStake Featured · kicks off in 30 mins</div></div>' + chip('upcoming') + '</div>' +
+      '<p class="muted">Three ways to fill the form: leave everything blank and the system invents teams, odds and the goal schedule; type only the two team names (tap the 🎲 dice for random names) and it fills the rest; or type your own odds and goals — what you type is always kept, only blanks are generated.</p>') +
+    box('8 · SAFETY RULES — read once, follow always',
+      '<ol class="gsteps">' +
+      '<li>A super admin invite link is a master key. Never post one publicly.</li>' +
+      '<li>Never confirm a deposit you have not seen proof for.</li>' +
+      '<li>Role changes and balance edits (Users tab) are super-admin only — double-check the account before you tap.</li>' +
+      '<li>If money looks wrong, freeze payouts first (box 2), then investigate.</li>' +
+      '</ol>') +
+    '</div>';
+}
 // Random fictional team names for the featured-match dice buttons
 // (the server has the same bank for fully-blank submissions).
 const TEAM_A = ['Accra', 'Tema', 'Kumasi', 'Osu', 'Spintex', 'Takoradi', 'Madina', 'Legon', 'Achimota', 'Dansoman', 'Kasoa', 'Ho', 'Tamale', 'Cape Coast', 'Sunyani', 'Koforidua', 'Nungua', 'Teshie', 'Ashaiman', 'Winneba'];
@@ -309,6 +367,7 @@ function render() {
   });
   root.innerHTML =
     state.tab === 'dashboard' ? dashboardHTML() :
+    state.tab === 'guide' ? guideHTML() :
     state.tab === 'queue' ? tabsHTML() + queueHTML(false) :
     state.tab === 'matches' ? matchesHTML() :
     state.tab === 'users' ? usersHTML() :
