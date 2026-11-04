@@ -46,6 +46,12 @@ const MARKET_KEYS = {
   const s = line.replace('.', '');
   MARKET_KEYS['Over/Under ' + line] = [['Over ' + line, 'over' + s], ['Under ' + line, 'under' + s]];
 });
+// Correct Score: the standard 26 scorelines, keys cs<h><a> in the
+// odds book (priced server-side in expandOdds). It stays out of
+// MARKET_LIST on purpose — the match details page adds it itself, so
+// the list-page Market filter and compact rows never render 26 picks.
+const CS_GRID = [[1, 0], [2, 0], [2, 1], [3, 0], [3, 1], [3, 2], [4, 0], [4, 1], [4, 2], [5, 0], [5, 1], [0, 0], [1, 1], [2, 2], [3, 3], [0, 1], [0, 2], [1, 2], [0, 3], [1, 3], [2, 3], [0, 4], [1, 4], [2, 4], [0, 5], [1, 5]];
+MARKET_KEYS['Correct Score'] = CS_GRID.map(([h, a]) => [h + '-' + a, 'cs' + h + a]);
 const DATES = ['All', 'Today', 'Live', 'Tomorrow'];
 
 let toastTimer;
@@ -223,13 +229,26 @@ function matchDetailsHTML() {
   let html = back + '<div class="card"><div class="league">' + esc(m.league) + '</div>' +
     '<div class="md-when">' + when + '</div>' +
     '<div class="md-teams">' + team(m.home, m.home_logo, m.status === 'live' ? m.sh : null) + team(m.away, m.away_logo, m.status === 'live' ? m.sa : null) + '</div></div>';
-  for (const market of MARKET_LIST) {
+  const oddBtn = (market, o) => {
+    const sel = state.slip.has(slipKey(m.id, market, o.label)) ? ' sel' : '';
+    return '<button class="odd' + sel + '" data-odd="' + m.id + '" data-market="' + esc(market) + '" data-pick="' + esc(o.label) + '"><small>' + esc(o.label) + '</small>' + o.odd.toFixed(2) + '</button>';
+  };
+  for (const market of [...MARKET_LIST, 'Correct Score']) {
     const opts = marketsForMarket(m, market);
     if (!opts.length) continue;
-    html += '<div class="card md-sec"><h3>' + esc(market) + '</h3><div class="md-odds">' + opts.map(o => {
-      const sel = state.slip.has(slipKey(m.id, market, o.label)) ? ' sel' : '';
-      return '<button class="odd' + sel + '" data-odd="' + m.id + '" data-market="' + esc(market) + '" data-pick="' + esc(o.label) + '"><small>' + esc(o.label) + '</small>' + o.odd.toFixed(2) + '</button>';
-    }).join('') + '</div></div>';
+    if (market === 'Correct Score') {
+      // Grouped like the big books (Prince's reference screenshot):
+      // the home team's winning scorelines, the draws, then the
+      // away team's winning scorelines.
+      const side = (o) => { const [h, a] = o.label.split('-').map(Number); return h > a ? 0 : h === a ? 1 : 2; };
+      const groups = [[m.home + ' Win', 0], ['Draw', 1], [m.away + ' Win', 2]];
+      html += '<div class="card md-sec"><h3>Correct Score</h3>' + groups.map(([title, g]) => {
+        const go = opts.filter(o => side(o) === g);
+        return go.length ? '<div class="md-sub">' + esc(title) + '</div><div class="md-odds">' + go.map(o => oddBtn(market, o)).join('') + '</div>' : '';
+      }).join('') + '</div>';
+      continue;
+    }
+    html += '<div class="card md-sec"><h3>' + esc(market) + '</h3><div class="md-odds">' + opts.map(o => oddBtn(market, o)).join('') + '</div></div>';
   }
   // Handicap (spread): ESPN publishes one line per game, so it is
   // not in MARKET_LIST (the line differs by match). The line in the

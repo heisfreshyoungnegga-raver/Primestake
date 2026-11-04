@@ -147,6 +147,11 @@ function keyFor(market, pick) {
     if (pick === 'Over ' + ou[1]) return 'over' + suffix;
     if (pick === 'Under ' + ou[1]) return 'under' + suffix;
   }
+  // Correct Score picks are the exact scoreline: '2-1' -> 'cs21'.
+  if (market === 'Correct Score') {
+    const cs = /^(\d)-(\d)$/.exec(pick);
+    if (cs) return 'cs' + cs[1] + cs[2];
+  }
   // Handicap markets carry the home team's spread line in the name
   // ('Handicap +0.5'); picks are 'Home +0.5' / 'Away -0.5'.
   const hc = /^Handicap ([+-]?\d+\.\d)$/.exec(market);
@@ -177,6 +182,10 @@ function pickWon(market, pick, home, away) {
     case '1X2': return pick === '1' ? home > away : pick === 'X' ? home === away : away > home;
     case 'Double Chance': return pick === '12' ? home !== away : pick === '1X' ? home >= away : away >= home;
     case 'Both Teams To Score': return pick === 'Yes' ? (home > 0 && away > 0) : (home === 0 || away === 0);
+    case 'Correct Score': {
+      const cs = /^(\d)-(\d)$/.exec(pick);
+      return !!cs && home === Number(cs[1]) && away === Number(cs[2]);
+    }
     default: return false;
   }
 }
@@ -194,6 +203,13 @@ function livePickState(market, pick, home, away) {
   }
   if (market === 'Both Teams To Score') {
     if (home > 0 && away > 0) return pick === 'Yes' ? 'won' : 'lost';
+    return 'open';
+  }
+  if (market === 'Correct Score') {
+    // Dead the moment either team passes the picked goal count;
+    // otherwise it can only be decided at full time.
+    const cs = /^(\d)-(\d)$/.exec(pick);
+    if (cs && (home > Number(cs[1]) || away > Number(cs[2]))) return 'lost';
     return 'open';
   }
   return 'open';
@@ -488,6 +504,19 @@ function expandOdds(o1, ox, o2) {
   const ng = fair(1 - pHomeScores * pAwayScores);
   if (gg && gg > 1.01) odds.gg = gg;
   if (ng && ng > 1.01) odds.ng = ng;
+  // Correct Score (Prince's ask, 2026-11-04): price the standard 26
+  // scorelines from the same Poisson split (independent home/away
+  // goal counts). Fair price less the usual margin, capped at 201
+  // like the big books; scorelines too unlikely to price honestly
+  // under that cap (p < 0.003) are left out of the book.
+  const pmf = (k, mu) => { let t = Math.exp(-mu); for (let i = 1; i <= k; i++) t *= mu / i; return t; };
+  const CS_GRID = [[1, 0], [2, 0], [2, 1], [3, 0], [3, 1], [3, 2], [4, 0], [4, 1], [4, 2], [5, 0], [5, 1], [0, 0], [1, 1], [2, 2], [3, 3], [0, 1], [0, 2], [1, 2], [0, 3], [1, 3], [2, 3], [0, 4], [1, 4], [2, 4], [0, 5], [1, 5]];
+  for (const [h, a] of CS_GRID) {
+    const p = pmf(h, muH) * pmf(a, muA);
+    if (p < 0.003) continue;
+    const price = Math.min(201, Math.round((1 / p) / (margin > 1 ? 1.05 : 1) * 100) / 100);
+    if (price > 1.01) odds['cs' + h + a] = price;
+  }
   Object.keys(odds).forEach(k => { if (!(odds[k] > 1)) delete odds[k]; });
   return odds;
 }
