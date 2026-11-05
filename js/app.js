@@ -496,7 +496,7 @@ function betCardHTML(b) {
   }
   const won = b.status === 'won';
   return '<div class="card' + (won ? ' woncard' : '') + '"><div class="card-head"><b>' + esc(b.code) +
-    (won ? trophySVG('trophy-mini') : '') + '</b>' + statusChip(b.status) + '</div>' +
+    (won ? trophyMiniHTML() : '') + '</b>' + statusChip(b.status) + '</div>' +
     '<p class="muted">' + fmtDate(b.placed_at) + '</p>' + legs +
     '<div class="card-row"><span>Stake</span><b>' + money(b.stake_ghs) + '</b></div>' +
     '<div class="card-row"><span>Total odds</span><b>' + Number(b.total_odds).toFixed(2) + '</b></div>' +
@@ -525,6 +525,31 @@ async function loadBets() {
    celebration: rotating light rays, falling confetti, the trophy
    floating over the amount won. Seen wins are remembered per device
    so the party fires once per winning ticket. ----- */
+/* The real cup photo (Prince's ask 2026-11-05): a generated gold
+   trophy with its background removed, stored like the other assets
+   as base64 text in assets/trophy-cup.png and decoded on load. The
+   hand-drawn SVG below stays as the instant fallback until the photo
+   arrives (and forever if the fetch fails). */
+let trophyURL = '';
+function loadTrophyImage() {
+  fetch('assets/trophy-cup.png').then(r => r.text()).then(t => {
+    const clean = t.replace(/\s+/g, '');
+    if (clean.length > 1000) {
+      trophyURL = 'data:image/png;base64,' + clean;
+      if (state.view === 'bets') render();
+    }
+  }).catch(() => {});
+}
+function trophyHeroHTML() {
+  return trophyURL
+    ? '<img class="trophy-photo" src="' + trophyURL + '" alt="Winning trophy">'
+    : trophySVG();
+}
+function trophyMiniHTML() {
+  return trophyURL
+    ? '<img class="trophy-mini-img" src="' + trophyURL + '" alt="">'
+    : trophySVG('trophy-mini');
+}
 function trophySVG(cls) {
   return '<svg class="' + (cls || 'trophy-svg') + '" viewBox="0 0 200 162" fill="none" aria-hidden="true">' +
     '<defs>' +
@@ -586,7 +611,7 @@ function showWinModal(wins, total) {
   el.innerHTML = '<div class="modal winmodal">' +
     '<div class="winrays"></div>' + confetti +
     '<button class="iconbtn modal-x" data-close-win aria-label="Close">&times;</button>' +
-    '<div class="trophy-hero">' + trophySVG() + '</div>' +
+    '<div class="trophy-hero">' + trophyHeroHTML() + '</div>' +
     '<h2 class="win-title">YOU WON!</h2>' +
     '<p class="modal-sub">' + (wins.length > 1 ? wins.length + ' winning tickets: ' + codes : 'Winning ticket ' + codes) + '</p>' +
     '<div class="win-amount">' + money(total) + '</div>' +
@@ -1466,6 +1491,7 @@ if (urlParams.get('ref')) localStorage.setItem('ps_ref', urlParams.get('ref'));
 if (urlParams.get('admin_invite')) localStorage.setItem('ps_admin_invite', urlParams.get('admin_invite'));
 loadHeroImages();
 loadTileImages();
+loadTrophyImage();
 if (urlParams.get('admin_invite')) openAuth('register');
 // A referral link is for a NEW account (Prince hit this himself on
 // 2026-11-03: opening his own link while signed in just showed him
