@@ -1,4 +1,4 @@
-const { sql, send, guard, isCustomMatch, customMatchState, fillOdds } = require('./_lib');
+const { sql, send, guard, isCustomMatch, customMatchState, fillOdds, maybeAutoSettle } = require('./_lib');
 const { maybeRefreshLive } = require('./_espn');
 
 // Public match list: live matches first, then upcoming by start time.
@@ -13,6 +13,9 @@ module.exports = guard(async (req, res) => {
   // from ESPN before answering (see maybeRefreshLive). A feed failure
   // must never break the list, so errors are swallowed.
   await maybeRefreshLive().catch(() => {});
+  // Finished matches settle their bets on their own (see _lib):
+  // without this, tickets sat OPEN until an admin pressed Settle.
+  await maybeAutoSettle().catch(() => {});
   const rows = await sql(
     `select id, league, home_team, away_team, starts_at, status, minute,
             score_home, score_away, odds, home_logo, away_logo, external_ref, goal_events

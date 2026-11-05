@@ -554,4 +554,92 @@ async function ensureInviteCode(userId) {
   return null;
 }
 
-module.exports = { sql, hashPassword, verifyPassword, issueToken, readBody, send, requireAuth, requireAdmin, requireSuperAdmin, guard, publicUser, betCode, MARKETS, keyFor, pickWon, shinobiConfig, shinobiFetch, mapIntentStatus, detectNetwork, ensurePaymentTables, ensureAdminTables, getSettings, applyDepositRewards, isCustomMatch, customMatchState, expandOdds, fillOdds, livePickState, cashoutQuote, inviteCode, ensureInviteCode };
+// Settle one match at a known final score: score every pending
+// selection, then settle each fully-decided open bet — winners are
+// credited their potential through the ledger. Shared by the admin
+// settle endpoint and the automatic sweep below.
+async function settleMatchAt(matchId, home, away) {
+  await sql("update matches set status = 'finished', score_home = $2, score_away = $3 where id = $1", [matchId, home, away]);
+  const sels = await sql(
+    "select id, bet_id, market, pick from bet_selections where match_id = $1 and result = 'pending'",
+    [matchId]
+  );
+  for (const s of sels) {
+    await sql('update bet_selections set result = $2 where id = $1', [s.id, pickWon(s.market, s.pick, home, away) ? 'won' : 'lost']);
+  }
+  const affected = [...new Set(sels.map(s => s.bet_id))];
+  let settledWon = 0, settledLost = 0;
+  for (const betId of affected) {
+    const rows = await sql(
+      `select b.id, b.user_id, b.potential_ghs, b.status,
+              count(*) filter (where s.result = 'pending') as pending,
+              count(*) filter (where s.result = 'lost') as lost
+       from bets b join bet_selections s on s.bet_id = b.id
+       where b.id = $1 group by b.id`,
+      [betId]
+    );
+    if (!rows.length) continue;
+    const b = rows[0];
+    if (b.status !== 'open' || Number(b.pending) > 0) continue;
+    if (Number(b.lost) > 0) {
+      await sql("update bets set status = 'lost', settled_at = now() where id = $1", [betId]);
+      settledLost++;
+    } else {
+      await sql(
+        `with upd as (update bets set status = 'won', settled_at = now() where id = $1 returning user_id, potential_ghs),
+              led as (insert into wallet_transactions (user_id, kind, method, amount_ghs, status)
+                      select user_id, 'bet_win', 'Balance', potential_ghs, 'completed' from upd returning id)
+         update users set balance_ghs = balance_ghs + (select potential_ghs from upd)
+         where id = (select user_id from upd)`,
+        [betId]
+      );
+      settledWon++;
+    }
+  }
+  return { selections_scored: sels.length, bets_won: settledWon, bets_lost: settledLost };
+}
+
+// Automatic settlement sweep. Matches end on their own — ESPN marks
+// them finished, featured matches run out their 95-minute clock — but
+// bets only ever settled when an admin pressed Settle, so players
+// stared at "OPEN" tickets for hours (PB-EZCW3G, settled by hand on
+// 2026-11-05). Claimed at most once per 3 minutes across instances
+// (same idiom as the ESPN refresh) and run from the public match
+// list; the caller swallows errors so the list never breaks.
+const SETTLE_SWEEP_MS = 3 * 60 * 1000;
+async function maybeAutoSettle() {
+  const now = Date.now();
+  const claimed = await sql(
+    `insert into operator_settings (key, value) values ('settle_sweep_at', $1)
+     on conflict (key) do update set value = excluded.value
+       where operator_settings.value ~ '^[0-9]+$' and operator_settings.value::bigint <= $2
+     returning key`,
+    [String(now), String(now - SETTLE_SWEEP_MS)]
+  );
+  if (!claimed.length) return 0;
+  const rows = await sql(
+    `select distinct m.id, m.external_ref, m.goal_events, m.starts_at, m.status, m.score_home, m.score_away
+     from matches m
+     join bet_selections s on s.match_id = m.id and s.result = 'pending'
+     where m.status = 'finished'
+        or (m.external_ref like 'custom:%' and m.starts_at < now() - interval '95 minutes')
+     limit 25`
+  );
+  let settled = 0;
+  for (const m of rows) {
+    let home, away;
+    if (isCustomMatch(m)) {
+      const st = customMatchState(m, new Date());
+      if (st.status !== 'finished') continue;
+      home = st.final_home; away = st.final_away;
+    } else {
+      home = Number(m.score_home); away = Number(m.score_away);
+      if (Number.isNaN(home) || Number.isNaN(away)) continue;
+    }
+    await settleMatchAt(m.id, home, away);
+    settled++;
+  }
+  return settled;
+}
+
+module.exports = { sql, hashPassword, verifyPassword, issueToken, readBody, send, requireAuth, requireAdmin, requireSuperAdmin, guard, publicUser, betCode, MARKETS, keyFor, pickWon, shinobiConfig, shinobiFetch, mapIntentStatus, detectNetwork, ensurePaymentTables, ensureAdminTables, getSettings, applyDepositRewards, isCustomMatch, customMatchState, expandOdds, fillOdds, livePickState, cashoutQuote, inviteCode, ensureInviteCode, settleMatchAt, maybeAutoSettle };
