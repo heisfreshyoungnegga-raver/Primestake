@@ -388,7 +388,7 @@ function guideHTML() {
       '<p class="muted">For a manual deposit, open the <b>Screenshot</b> and match the amount and reference before you <b>Confirm</b> — confirming credits the player and counts toward their 6 deposits to unlock withdrawals. <b>Reject</b> on a withdrawal refunds the held amount.</p>') +
     box('7 · FEATURED MATCH — Matches tab',
       '<div class="txrow"><div><b>Accra Falcons vs Kumasi Royals</b><div class="muted">Featured · PrimeStake Featured · kicks off in 30 mins</div></div>' + chip('upcoming') + '</div>' +
-      '<p class="muted">Three ways to fill the form: leave everything blank and the system invents teams, odds and the goal schedule; type only the two team names (tap the 🎲 dice for random names) and it fills the rest; or type your own odds and goals — what you type is always kept, only blanks are generated.</p>') +
+      '<p class="muted">Team names and odds can be left blank and the system fills those in — but the goal schedule is COMPULSORY: you must type the exact goals yourself, and the match will run exactly that timeline. For a goalless match, type <b>none</b>. What you type is always kept exactly as typed.</p>') +
     box('8 · BOOKING CODES — Booking Codes tab',
       '<div class="txrow"><div><div class="mannum" style="font-size:20px; letter-spacing:2px">48392</div><div class="muted">Saturday sure slip · Used 3 of 10 · sold at GHS 20.00</div></div>' + dBtn('Copy Code', true) + '</div>' +
       '<p class="muted">Mint a <b>5-digit code</b> for any slip you build — start from the 🎟 Code button on a match you just created. Sell the code to your users; when a player loads it, your exact selections land on their slip, and a use is counted only when they place the bet. Set max uses and an expiry so the code dies after matchday, and Revoke any code instantly.</p>') +
@@ -442,9 +442,9 @@ function featuredFormHTML() {
     '<label>Draw (X) <input type="number" step="0.01" min="1.01" id="ff_ox" placeholder="Auto"></label>' +
     '<label>Away win (2) <input type="number" step="0.01" min="1.01" id="ff_o2" placeholder="Auto"></label></div>' +
     '<p class="muted sm">Fill any of them — even just one. The blanks are priced around the prices you set, and the full book (Double Chance, Over/Under, BTTS) is built from the final 1X2.</p></fieldset>' +
-    '<fieldset class="fstep"><legend>4 · Goals (optional)</legend>' +
-    '<label>Goal schedule <input type="text" id="ffGoals" placeholder="Blank = auto goals"></label>' +
-    '<p class="muted sm">Write minute:side pairs like 12:home, 40:away, 78:home. Blank = goals generated to match the odds (the favourite scores more).</p></fieldset>' +
+    '<fieldset class="fstep"><legend>4 · Goals (required)</legend>' +
+    '<label>Goal schedule <input type="text" id="ffGoals" placeholder="Required — e.g. 12:home, 40:away, 78:home"></label>' +
+    '<p class="muted sm">Compulsory. Write minute:side pairs like 12:home, 40:away, 78:home — the match runs exactly this timeline and ends at exactly this score. For a 0-0 match, type <b>none</b>.</p></fieldset>' +
     '<button class="btn gold big" type="submit">Create Featured Match</button></form></div>';
 }
 function supportHTML() {
@@ -888,11 +888,18 @@ document.addEventListener('submit', async e => {
     if (ox > 1) body.ox = ox;
     if (o2 > 1) body.o2 = o2;
     const goalsText = $('#ffGoals').value.trim();
-    if (goalsText) {
+    // Goals are COMPULSORY (Prince's order, 2026-11-05): a featured
+    // match may only run a timeline a super admin typed himself —
+    // never a generated one. "none" is the explicit 0-0 script.
+    if (!goalsText) { toast('Goal schedule is compulsory — type the goals, or "none" for a 0-0 match.'); return; }
+    if (/^(none|0-0|0:0)$/i.test(goalsText)) {
+      body.goals = [];
+    } else {
       body.goals = goalsText.split(',').map(x => x.trim()).filter(Boolean).map(part => {
         const [min, side] = part.split(':').map(y => (y || '').trim());
         return { minute: Number(min), side: side === 'away' ? 'away' : 'home' };
       }).filter(g => g.minute >= 1 && g.minute <= 90);
+      if (!body.goals.length) { toast('No valid goals in the schedule — use pairs like 12:home, 40:away (minutes 1-90), or "none" for 0-0.'); return; }
     }
     try {
       const data = await api('/admin/create-match', { method: 'POST', body });
