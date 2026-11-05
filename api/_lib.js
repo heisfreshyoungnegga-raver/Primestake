@@ -567,7 +567,22 @@ function expandOdds(o1, ox, o2) {
 // Deterministic — the match list, the details page and bet
 // placement all see the same completed book.
 function fillOdds(odds) {
-  if (!odds || !(odds.o1 > 1 && odds.ox > 1 && odds.o2 > 1)) return odds || {};
+  if (!odds) return {};
+  const have = ['o1', 'ox', 'o2'].filter(k => odds[k] > 1);
+  if (have.length === 2) {
+    // Exactly one 1X2 price missing from the feed (ESPN sometimes
+    // sends draw + away only — Monza vs Atalanta, 2026-11-05): derive
+    // the missing price from the other two at the house margin, the
+    // same per-field completion the featured-match creator uses, so
+    // the 1 X 2 row never shows a hole a player cannot bet.
+    const missing = ['o1', 'ox', 'o2'].find(k => !have.includes(k));
+    let usedFair = 0;
+    for (const k of have) usedFair += 0.94 / odds[k];
+    const rest = Math.max(1 - usedFair, 0.02);
+    const derived = Math.min(51, Math.max(1.02, Math.round((0.94 / rest) * 100) / 100));
+    odds = { ...odds, [missing]: derived };
+  }
+  if (!(odds.o1 > 1 && odds.ox > 1 && odds.o2 > 1)) return odds;
   return { ...expandOdds(odds.o1, odds.ox, odds.o2), ...odds };
 }
 
