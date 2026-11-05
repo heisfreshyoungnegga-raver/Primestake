@@ -97,7 +97,11 @@ function loginHTML() {
     '</div>';
 }
 function tabsHTML() {
-  const tabs = [['dashboard', 'Dashboard'], ['queue', 'Payout Queue'], ['matches', 'Matches'], ['users', 'Users'], ['support', 'Support'], ['earnings', 'My Earnings']];
+  const tabs = [['dashboard', 'Dashboard'], ['queue', 'Payout Queue'], ['users', 'Users'], ['support', 'Support'], ['earnings', 'My Earnings']];
+  // Matches live ONLY in the Super Portal (Prince, 2026-11-05,
+  // same rule as Oddaroa) — creating, going live and settling are
+  // super admin work; feed + featured bets auto-settle server-side.
+  if (isSuperPortal) tabs.splice(2, 0, ['matches', 'Matches']);
   if (superTools()) { tabs.splice(1, 0, ['guide', 'Setup Guide']); tabs.push(['codes', 'Booking Codes']); tabs.push(['control', 'Platform Control']); }
   return '<div class="wtabs">' + tabs.map(([k, label]) =>
     '<button class="' + (state.tab === k ? 'on' : '') + '" data-atab="' + k + '">' + label + '</button>').join('') + '</div>';
