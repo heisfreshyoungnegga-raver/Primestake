@@ -1044,3 +1044,6 @@ input, select, textarea { max-width: 100%; }
   .modal { padding: 18px 16px; }
   .wtabs button { font-size: 12.5px; padding: 9px 4px; }
 }
+
+/* My Bets live legs (2026-11-05): keep the LIVE chip + score on one line */
+.legstate { white-space: nowrap; }

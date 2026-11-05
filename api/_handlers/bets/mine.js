@@ -1,4 +1,4 @@
-const { sql, send, guard, requireAuth, cashoutQuote } = require('../../_lib');
+const { sql, send, guard, requireAuth, cashoutQuote, isCustomMatch, customMatchState } = require('../../_lib');
 
 module.exports = guard(async (req, res) => {
   const auth = requireAuth(req, res);
@@ -31,7 +31,31 @@ module.exports = guard(async (req, res) => {
       );
       const byId = {};
       mrows.forEach(m => { byId[m.id] = m; });
-      for (const b of open) b.cashout_offer = cashoutQuote(b, b.selections || [], byId);
+      for (const b of open) {
+        b.cashout_offer = cashoutQuote(b, b.selections || [], byId);
+        // Live state per leg (Prince's ask 2026-11-05): My Bets must
+        // show a leg's match as LIVE with its current score and
+        // minute — the same display the Super Admin Matches tab
+        // uses — instead of a bare "pending". Custom matches derive
+        // their state from the clock and goal script; feed matches
+        // use their stored status and score.
+        for (const s of (b.selections || [])) {
+          const m = byId[s.match_id];
+          if (!m) continue;
+          if (isCustomMatch(m)) {
+            const st = customMatchState(m);
+            s.match_status = st.status;
+            s.live_home = st.score_home;
+            s.live_away = st.score_away;
+            s.live_minute = st.minute;
+          } else {
+            s.match_status = m.status;
+            s.live_home = m.score_home;
+            s.live_away = m.score_away;
+            s.live_minute = null;
+          }
+        }
+      }
     }
   }
   send(res, 200, { bets: rows });

@@ -482,10 +482,23 @@ function shrinkImage(file) {
   });
 }
 function betCardHTML(b) {
-  const legs = (b.selections || []).map(l =>
-    '<div class="leg"><span>' + esc(l.home_team || '') + ' vs ' + esc(l.away_team || '') + '</span>' +
-    '<span>' + esc(l.pick) + ' · ' + esc(l.market) + ' · <b>' + Number(l.odds).toFixed(2) + '</b></span>' +
-    '<span class="legres">' + esc(l.result || '') + '</span></div>').join('');
+  const legs = (b.selections || []).map(l => {
+    // Live legs wear the same pulsing LIVE chip + score + minute
+    // the Super Admin Matches tab shows (Prince's ask 2026-11-05);
+    // a finished-but-unsettled leg shows its FT score.
+    let res;
+    if (l.match_status === 'live') {
+      res = '<span class="st st-live">● LIVE' + (l.live_minute != null ? ' ' + l.live_minute + '&prime;' : '') + '</span> <b>' +
+        (l.live_home || 0) + '-' + (l.live_away || 0) + '</b>';
+    } else if (l.match_status === 'finished') {
+      res = '<span class="legres">FT ' + (l.live_home || 0) + '-' + (l.live_away || 0) + '</span>';
+    } else {
+      res = '<span class="legres">' + esc(l.result || '') + '</span>';
+    }
+    return '<div class="leg"><span>' + esc(l.home_team || '') + ' vs ' + esc(l.away_team || '') + '</span>' +
+      '<span>' + esc(l.pick) + ' · ' + esc(l.market) + ' · <b>' + Number(l.odds).toFixed(2) + '</b></span>' +
+      '<span class="legstate">' + res + '</span></div>';
+  }).join('');
   let foot = '';
   if (b.status === 'cashed_out' && b.cashout_ghs != null) {
     foot = '<div class="card-row"><span>Cashed out</span><b>' + money(b.cashout_ghs) + '</b></div>';
@@ -518,6 +531,14 @@ async function loadBets() {
   } catch (e) { state.myBets = []; }
   if (state.view === 'bets') render();
   maybeCelebrateWins();
+  // While any leg is live, keep My Bets fresh on its own so the
+  // score and minute move without the player refreshing.
+  clearTimeout(state.betsTimer);
+  const anyLive = (state.myBets || []).some(b => b.status === 'open' &&
+    (b.selections || []).some(s => s.match_status === 'live'));
+  if (anyLive) {
+    state.betsTimer = setTimeout(() => { if (state.view === 'bets') loadBets(); }, 30000);
+  }
 }
 /* ----- Winning trophy (Prince's ask 2026-11-05): a hand-drawn gold
    cup, PrimeStake-style. It badges won tickets in My Bets, and the
