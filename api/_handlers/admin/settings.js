@@ -22,7 +22,7 @@ module.exports = guard(async (req, res) => {
   for (const k of ['admin_commission_pct', 'user_cashback_pct']) {
     if (body[k] !== undefined) {
       const v = Number(body[k]);
-      if (!(v >= 0 && v <= 50)) return send(res, 400, { error: 'invalid_percent', detail: k + ' must be between 0 and 50.' });
+      if (!(v >= 0 && v <= 100)) return send(res, 400, { error: 'invalid_percent', detail: k + ' must be between 0 and 100.' });
       updates[k] = String(v);
     }
   }
