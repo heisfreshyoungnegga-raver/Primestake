@@ -673,11 +673,12 @@ async function maybeAutoSettle() {
   );
   if (!claimed.length) return 0;
   const rows = await sql(
-    `select distinct m.id, m.external_ref, m.goal_events, m.starts_at, m.status, m.score_home, m.score_away
+    `select m.id, m.external_ref, m.goal_events, m.starts_at, m.status, m.score_home, m.score_away
      from matches m
-     join bet_selections s on s.match_id = m.id and s.result = 'pending'
-     where m.status = 'finished'
-        or (m.external_ref like 'custom:%' and m.starts_at < now() - interval '95 minutes')
+     where (m.status = 'finished'
+            and exists (select 1 from bet_selections s where s.match_id = m.id and s.result = 'pending'))
+        or (m.external_ref like 'custom:%' and m.status <> 'finished'
+            and m.starts_at < now() - interval '95 minutes')
      limit 25`
   );
   let settled = 0;
