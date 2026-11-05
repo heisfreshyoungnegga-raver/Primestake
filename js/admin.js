@@ -162,13 +162,21 @@ function matchesHTML() {
     [['1 (home)', 'o1'], ['X (draw)', 'ox'], ['2 (away)', 'o2'], ['1X', 'dc1x'], ['12', 'dc12'], ['X2', 'dcx2'], ['Over 0.5', 'over05'], ['Under 0.5', 'under05'], ['Over 1.5', 'over15'], ['Under 1.5', 'under15'], ['Over 2.5', 'over25'], ['Under 2.5', 'under25'], ['Over 3.5', 'over35'], ['Under 3.5', 'under35'], ['Over 4.5', 'over45'], ['Under 4.5', 'under45'], ['GG (both score)', 'gg'], ['NG', 'ng']]
       .map(([l, k]) => '<label>' + l + ' <input type="number" step="0.01" min="1.01" id="mf_' + k + '"></label>').join('') +
     '</div><button class="btn gold big" type="submit">Add Match</button></form></div>';
-  const rows = state.matches.map(m =>
-    '<div class="txrow"><div><b>' + esc(m.home_team) + ' vs ' + esc(m.away_team) + '</b>' +
-    '<div class="muted">' + (m.external_ref && String(m.external_ref).indexOf('espn:') === 0 ? 'ESPN · ' : m.external_ref && String(m.external_ref).indexOf('custom:') === 0 ? 'Featured · ' : 'Manual · ') + esc(m.league) + ' · ' + fmtDate(m.starts_at) + ' · ' + m.score_home + '-' + m.score_away + (m.minute != null ? ' · ' + m.minute + "'" : '') + '</div></div>' +
-    chip(m.status) +
+  const rows = state.matches.map(m => {
+    const ds = m.display_status || m.status;
+    const dscore = (m.display_home != null ? m.display_home : m.score_home) + '-' + (m.display_away != null ? m.display_away : m.score_away);
+    const stateBit = ds === 'live'
+      ? ' · <b style="color:var(--live)">' + dscore + (m.display_minute != null ? ' · ' + m.display_minute + "'" : '') + '</b>'
+      : ds === 'finished' ? ' · FT ' + dscore : ' · ' + dscore;
+    const chipHtml = ds === 'live'
+      ? '<span class="st st-live">● LIVE' + (m.display_minute != null ? ' ' + m.display_minute + "'" : '') + '</span>'
+      : chip(ds);
+    return '<div class="txrow"><div><b>' + esc(m.home_team) + ' vs ' + esc(m.away_team) + '</b>' +
+    '<div class="muted">' + (m.external_ref && String(m.external_ref).indexOf('espn:') === 0 ? 'ESPN · ' : m.external_ref && String(m.external_ref).indexOf('custom:') === 0 ? 'Featured · ' : 'Manual · ') + esc(m.league) + ' · ' + fmtDate(m.starts_at) + stateBit + '</div></div>' +
+    chipHtml +
     '<span>' +
     (superTools() ? '<button class="btn ghost sm" data-bc-for="' + m.id + '">🎟 Code</button> ' : '') +
-    (m.status === 'upcoming' ? '<button class="btn gold sm" data-golive="' + m.id + '">Go Live</button> ' : '') +
+    (m.status === 'upcoming' && ds === 'upcoming' ? '<button class="btn gold sm" data-golive="' + m.id + '">Go Live</button> ' : '') +
     (m.status === 'live' ? '<button class="btn ghost sm" data-score="' + m.id + '">Update Score</button> ' : '') +
     (m.status !== 'finished'
       ? (superTools()
@@ -181,7 +189,8 @@ function matchesHTML() {
           '<button class="btn gold sm" data-setscore="' + m.id + '">Set Final Score</button></span></span>'
         : '<button class="btn ghost sm" data-settle="' + m.id + '">Settle</button>')
       : '') +
-    '</span></div>').join('');
+    '</span></div>';
+  }).join('');
   return tabsHTML() + featuredFormHTML() + form + '<div class="card"><h3>Matches</h3>' + (rows || '<p class="empty">No matches yet.</p>') + '</div>';
 }
 function usersHTML() {
@@ -917,6 +926,14 @@ document.addEventListener('submit', async e => {
     } catch (err) { toast(err.message); }
   }
 });
+
+// While the Matches tab is open, quietly refresh every 30s so the
+// admin watches custom matches flip to LIVE (and full time) on their
+// own — but never while they are typing in a form.
+setInterval(() => {
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (state.user && state.tab === 'matches' && tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') loadAll();
+}, 30000);
 
 (async () => {
   render();

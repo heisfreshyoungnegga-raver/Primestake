@@ -629,6 +629,8 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 .st-won, .st-completed, .st-approved { background: #d9f2e3; color: var(--win); }
 .st-lost, .st-rejected { background: #fbe0e1; color: var(--live); }
 .st-pending { background: #fdf0c0; }
+.st-live { background: #fbe0e1; color: var(--live); animation: stpulse 1.6s ease-in-out infinite; }
+@keyframes stpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 .txrow { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
 .txrow:first-child { border-top: 0; }
 .amt { font-weight: 700; }

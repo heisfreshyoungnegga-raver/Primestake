@@ -223,9 +223,30 @@ function livePickState(market, pick, home, away) {
 // leg it has already lost kills the offer. Featured (custom)
 // matches only offer before kickoff — their prices do not move
 // once the game is live, so a live offer could be gamed.
+// The odds keys that make up one market's full book — used to strip
+// the bookmaker margin (overround) out of a price.
+function marketGroupKeys(market, key, book) {
+  if (MARKETS[market]) return Object.values(MARKETS[market]);
+  const ou = /^Over\/Under (\d+\.\d)$/.exec(market);
+  if (ou) { const sfx = ou[1].replace('.', ''); return ['over' + sfx, 'under' + sfx]; }
+  if (market === 'Correct Score') return Object.keys(book).filter(k => /^cs\d+$/.test(k));
+  if (/^Handicap /.test(market)) return ['sph', 'spa'];
+  return [key];
+}
+
+// Cashout pricing (Prince, 2026-11-05): the offer is the ticket's TRUE
+// fair value — the potential payout times the de-margined probability
+// of every open leg winning, times the house factor — so the price
+// follows the real chances in the current book instead of a flat
+// fraction of the stake, and the platform never pays over the odds.
+// No offer at all while ANY leg's match is live: the cashout button
+// simply disappears (no message) and returns once that match is
+// settled full time, if the ticket is still alive. A full-time leg
+// that won locks in at full value; a lost leg kills the ticket.
+const CASHOUT_HOUSE_FACTOR = 0.92;
 function cashoutQuote(bet, sels, matchesById) {
   if (!sels || !sels.length) return null;
-  let ratio = 1;
+  let fairProb = 1;
   for (const s of sels) {
     const m = matchesById[s.match_id];
     if (!m) return null;
@@ -234,20 +255,26 @@ function cashoutQuote(bet, sels, matchesById) {
     if (isCustomMatch(m)) {
       const st = customMatchState(m);
       status = st.status; sh = st.score_home; sa = st.score_away;
-      if (status !== 'upcoming') return null;
     }
-    if (status === 'finished') return null;
-    if (status === 'live') {
-      const st = livePickState(s.market, s.pick, sh, sa);
-      if (st === 'lost') return null;
-      if (st === 'won') { ratio *= Number(s.odds); continue; }
+    if (status === 'live') return null;
+    if (status === 'finished') {
+      if (!pickWon(s.market, s.pick, sh, sa)) return null;
+      continue;
     }
+    if (status !== 'upcoming') return null;
+    const book = fillOdds(m.odds);
     const key = keyFor(s.market, s.pick);
-    const cur = key ? Number(fillOdds(m.odds)[key]) : NaN;
+    const cur = key ? Number(book[key]) : NaN;
     if (!(cur > 1)) return null;
-    ratio *= Number(s.odds) / cur;
+    let over = 0;
+    for (const k of marketGroupKeys(s.market, key, book)) {
+      const o = Number(book[k]);
+      if (o > 1) over += 1 / o;
+    }
+    if (!(over > 0)) return null;
+    fairProb *= (1 / cur) / over;
   }
-  const raw = Number(bet.stake_ghs) * ratio * 0.95;
+  const raw = Number(bet.potential_ghs) * fairProb * CASHOUT_HOUSE_FACTOR;
   const amt = Math.floor(Math.min(raw, Number(bet.potential_ghs)) * 100) / 100;
   return amt > 0 ? amt : null;
 }
