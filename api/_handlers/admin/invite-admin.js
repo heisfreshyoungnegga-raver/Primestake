@@ -30,5 +30,5 @@ module.exports = guard(async (req, res) => {
      values ($1, $2, $3, now() + ($4 || ' hours')::interval) returning token, expires_at`,
     [token, k, auth.uid, String(hrs)]
   );
-  send(res, 201, { token: rows[0].token, kind: k, expires_at: rows[0].expires_at, path: '/?admin_invite=' + rows[0].token });
+  send(res, 201, { token: rows[0].token, kind: k, expires_at: rows[0].expires_at, path: '/admin.html?admin_invite=' + rows[0].token });
 });
