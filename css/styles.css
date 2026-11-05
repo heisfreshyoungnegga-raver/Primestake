@@ -605,7 +605,7 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 .card h3 { margin: 4px 0 10px; }
 /* Setup Guide demo boxes: the box name sits above each box so a new
    super admin can match the demo to the real card it teaches. */
-.ggrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px 14px; margin: 6px 0 14px; }
+.ggrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 20px 14px; margin: 6px 0 14px; }
 .gwrap { min-width: 0; }
 .gname { font-size: 12.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--gold, #f5c518); margin: 0 0 6px 2px; }
 .gbox { position: relative; background: var(--surface); border: 1.5px dashed var(--line); border-radius: var(--radius); padding: 26px 12px 10px; }
@@ -1010,4 +1010,37 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .trophy-mini-img { height: 27px; width: auto; vertical-align: -8px; margin-left: 7px; }
 @media (prefers-reduced-motion: reduce) {
   .trophy-photo { animation: none; }
+}
+
+/* ----- Responsive hardening (Prince, 2026-11-05: "adapt to every
+   device with good UI") -----
+   1. Nothing may ever push the page wider than the screen; `clip`
+      (not `hidden`) keeps the sticky header working.
+   2. The header nav row scrolls sideways on phones — a soft fade on
+      its right edge shows there is more to swipe to, instead of a tab
+      looking cut off mid-word (Prince's screenshot: "My B…").
+   3. Modals get breathing room on small screens, long links/numbers
+      wrap instead of overflowing, and form controls can never exceed
+      their container. */
+html, body { overflow-x: clip; }
+.modalwrap { padding: 12px; }
+.mannum { overflow-wrap: anywhere; }
+.card-row { gap: 12px; }
+input, select, textarea { max-width: 100%; }
+.sb-row { flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .mainnav {
+    -webkit-overflow-scrolling: touch;
+    -webkit-mask-image: linear-gradient(to right, #000 88%, transparent 100%);
+    mask-image: linear-gradient(to right, #000 88%, transparent 100%);
+  }
+}
+@media (max-width: 480px) {
+  .navlink { padding: 8px 9px; font-size: 13.5px; }
+  .logo { font-size: 16px; }
+  .headactions .btn { padding: 7px 10px; }
+  .hero h1 { font-size: 24px; }
+  .bn-item { min-width: 0; flex: 1 1 0; }
+  .modal { padding: 18px 16px; }
+  .wtabs button { font-size: 12.5px; padding: 9px 4px; }
 }
