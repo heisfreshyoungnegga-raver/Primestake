@@ -935,3 +935,68 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .slipfab { display: none; }
   body { padding-bottom: 62px; }
 }
+
+/* ----- Winning trophy (2026-11-05) ----- */
+.woncard {
+  border: 1.5px solid var(--gold);
+  box-shadow: 0 0 0 1px rgba(245, 197, 24, .30), 0 12px 30px rgba(245, 197, 24, .16);
+}
+.trophy-mini { height: 26px; width: 32px; vertical-align: -8px; margin-left: 7px; }
+.winamt { color: #17a34a; }
+.winwrap { z-index: 120; }
+.winmodal {
+  text-align: center;
+  overflow: hidden;
+  background: linear-gradient(165deg, #1a1805 0%, #0d0d0b 58%, #000 100%);
+  color: #fff;
+  border: 1px solid rgba(245, 197, 24, .55);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .6), 0 0 44px rgba(245, 197, 24, .22);
+}
+.winmodal .muted { color: #bdbda9; }
+.winmodal .modal-sub { color: #d8d8c8; }
+.winmodal .modal-x { color: #fff; z-index: 5; }
+.winrays {
+  position: absolute;
+  top: -150px; left: 50%;
+  width: 440px; height: 440px; margin-left: -220px;
+  background: repeating-conic-gradient(from 0deg, rgba(245, 197, 24, .16) 0deg 9deg, transparent 9deg 18deg);
+  -webkit-mask-image: radial-gradient(circle, #000 0 52%, transparent 68%);
+  mask-image: radial-gradient(circle, #000 0 52%, transparent 68%);
+  animation: winspin 26s linear infinite;
+  pointer-events: none;
+}
+@keyframes winspin { to { transform: rotate(360deg); } }
+.trophy-hero { position: relative; z-index: 2; margin-top: 10px; }
+.trophy-hero .trophy-svg {
+  height: 148px; width: auto;
+  filter: drop-shadow(0 12px 24px rgba(245, 197, 24, .45));
+  animation: trophyfloat 3.2s ease-in-out infinite;
+}
+@keyframes trophyfloat {
+  0%, 100% { transform: translateY(0) rotate(-1.3deg); }
+  50% { transform: translateY(-9px) rotate(1.3deg); }
+}
+.win-title {
+  position: relative; z-index: 2;
+  font-size: 31px; letter-spacing: 3px; margin: 6px 0 2px;
+  color: var(--gold);
+  text-shadow: 0 2px 18px rgba(245, 197, 24, .45);
+}
+.win-amount {
+  position: relative; z-index: 2;
+  font-size: 36px; font-weight: 800; color: #ffe98a; margin: 4px 0 8px;
+}
+.confetti {
+  position: absolute; top: -14px; z-index: 3;
+  width: 8px; height: 14px; border-radius: 2px; opacity: 0;
+  animation-name: confall; animation-timing-function: linear; animation-iteration-count: infinite;
+  pointer-events: none;
+}
+@keyframes confall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 0; }
+  8% { opacity: 1; }
+  100% { transform: translateY(480px) rotate(560deg); opacity: .9; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trophy-hero .trophy-svg, .winrays, .confetti { animation: none; }
+}

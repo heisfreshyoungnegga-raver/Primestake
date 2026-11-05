@@ -494,11 +494,15 @@ function betCardHTML(b) {
     foot = '<button class="btn gold big" data-cashout="' + b.id + '">' +
       (armed ? 'Tap again to confirm — ' : '') + 'Cashout ' + money(b.cashout_offer) + '</button>';
   }
-  return '<div class="card"><div class="card-head"><b>' + esc(b.code) + '</b>' + statusChip(b.status) + '</div>' +
+  const won = b.status === 'won';
+  return '<div class="card' + (won ? ' woncard' : '') + '"><div class="card-head"><b>' + esc(b.code) +
+    (won ? trophySVG('trophy-mini') : '') + '</b>' + statusChip(b.status) + '</div>' +
     '<p class="muted">' + fmtDate(b.placed_at) + '</p>' + legs +
     '<div class="card-row"><span>Stake</span><b>' + money(b.stake_ghs) + '</b></div>' +
     '<div class="card-row"><span>Total odds</span><b>' + Number(b.total_odds).toFixed(2) + '</b></div>' +
-    '<div class="card-row"><span>Potential win</span><b>' + money(b.potential_ghs) + '</b></div>' + foot + '</div>';
+    (won
+      ? '<div class="card-row"><span>Winnings</span><b class="winamt">' + money(b.potential_ghs) + '</b></div>'
+      : '<div class="card-row"><span>Potential win</span><b>' + money(b.potential_ghs) + '</b></div>') + foot + '</div>';
 }
 function betsHTML() {
   if (!state.user) return gateHTML('My Bets');
@@ -513,6 +517,94 @@ async function loadBets() {
     state.myBets = data.bets;
   } catch (e) { state.myBets = []; }
   if (state.view === 'bets') render();
+  maybeCelebrateWins();
+}
+/* ----- Winning trophy (Prince's ask 2026-11-05): a hand-drawn gold
+   cup, PrimeStake-style. It badges won tickets in My Bets, and the
+   first time a freshly-won bet is seen the player gets the full
+   celebration: rotating light rays, falling confetti, the trophy
+   floating over the amount won. Seen wins are remembered per device
+   so the party fires once per winning ticket. ----- */
+function trophySVG(cls) {
+  return '<svg class="' + (cls || 'trophy-svg') + '" viewBox="0 0 200 162" fill="none" aria-hidden="true">' +
+    '<defs>' +
+    '<linearGradient id="tgold" x1="0" y1="0" x2="0" y2="1">' +
+    '<stop offset="0" stop-color="#ffedb0"/><stop offset=".38" stop-color="#f5c518"/>' +
+    '<stop offset=".75" stop-color="#d19a06"/><stop offset="1" stop-color="#8a6108"/></linearGradient>' +
+    '<linearGradient id="tgold2" x1="0" y1="0" x2="1" y2="0">' +
+    '<stop offset="0" stop-color="#c9930a"/><stop offset=".5" stop-color="#ffe98a"/><stop offset="1" stop-color="#c9930a"/></linearGradient>' +
+    '</defs>' +
+    '<path d="M30 12l2.4 6.2 6.2 2.4-6.2 2.4L30 29.2l-2.4-6.2-6.2-2.4 6.2-2.4z" fill="#ffd94d"/>' +
+    '<path d="M168 6l1.9 4.9 4.9 1.9-4.9 1.9L168 19.6l-1.9-4.9-4.9-1.9 4.9-1.9z" fill="#ffe98a"/>' +
+    '<path d="M177 50l1.5 3.9 3.9 1.5-3.9 1.5-1.5 3.9-1.5-3.9-3.9-1.5 3.9-1.5z" fill="#ffd94d"/>' +
+    '<path d="M61 42C36 44 32 76 63 84" stroke="url(#tgold)" stroke-width="10" stroke-linecap="round"/>' +
+    '<path d="M139 42c25 2 29 34-2 42" stroke="url(#tgold)" stroke-width="10" stroke-linecap="round"/>' +
+    '<path d="M58 30h84v30c0 27-18 46-42 46S58 87 58 60z" fill="url(#tgold)"/>' +
+    '<ellipse cx="100" cy="30" rx="42" ry="6" fill="url(#tgold2)"/>' +
+    '<path d="M66 38c0 22 6 40 16 50-14-4-24-22-24-42 0-3 4-8 8-8z" fill="#fff" opacity=".28"/>' +
+    '<path d="M100 50l3.3 10.7 11.3-.7-8.6 7.2 2.7 11-8.7-6.8-8.7 6.8 2.7-11-8.6-7.2 11.3.7z" fill="#fff6cf" stroke="#8a6108" stroke-width="1.4" stroke-linejoin="round"/>' +
+    '<rect x="91" y="104" width="18" height="13" rx="2" fill="url(#tgold)"/>' +
+    '<ellipse cx="100" cy="119" rx="17" ry="4" fill="url(#tgold2)"/>' +
+    '<path d="M76 123h48l7 15H69z" fill="url(#tgold)"/>' +
+    '<rect x="62" y="138" width="76" height="13" rx="3" fill="url(#tgold2)"/>' +
+    '<rect x="80" y="142" width="40" height="5" rx="2.5" fill="#8a6108" opacity=".55"/>' +
+    '<path d="M38 128q62 20 124 0" stroke="#c9930a" stroke-width="3" stroke-linecap="round"/>' +
+    '<g fill="url(#tgold)" stroke="#8a6108" stroke-width=".6">' +
+    '<ellipse cx="46" cy="98" rx="7" ry="3" transform="rotate(-42 46 98)"/>' +
+    '<ellipse cx="40" cy="110" rx="7" ry="3" transform="rotate(-24 40 110)"/>' +
+    '<ellipse cx="42" cy="122" rx="7" ry="3" transform="rotate(-8 42 122)"/>' +
+    '<ellipse cx="154" cy="98" rx="7" ry="3" transform="rotate(42 154 98)"/>' +
+    '<ellipse cx="160" cy="110" rx="7" ry="3" transform="rotate(24 160 110)"/>' +
+    '<ellipse cx="158" cy="122" rx="7" ry="3" transform="rotate(8 158 122)"/>' +
+    '</g></svg>';
+}
+function celebratedWins() {
+  try { return JSON.parse(localStorage.getItem('ps_celebrated_wins') || '[]'); } catch (e) { return []; }
+}
+function maybeCelebrateWins() {
+  if (!state.user || document.getElementById('winWrap')) return;
+  const seen = celebratedWins();
+  const fresh = (state.myBets || []).filter(b => b.status === 'won' && !seen.includes(b.id));
+  if (!fresh.length) return;
+  const total = fresh.reduce((s, b) => s + Number(b.potential_ghs || 0), 0);
+  state.pendingWinIds = fresh.map(b => b.id);
+  showWinModal(fresh, total);
+}
+function showWinModal(wins, total) {
+  closeWinModal(false);
+  const cols = ['#f5c518', '#ffe98a', '#2ecc71', '#ffffff', '#c9930a'];
+  let confetti = '';
+  for (let i = 0; i < 26; i++) {
+    confetti += '<i class="confetti" style="left:' + Math.round(Math.random() * 100) + '%;background:' +
+      cols[i % cols.length] + ';animation-delay:' + (Math.random() * 0.9).toFixed(2) +
+      's;animation-duration:' + (2.4 + Math.random() * 1.8).toFixed(2) + 's"></i>';
+  }
+  const codes = wins.map(b => esc(b.code)).join(', ');
+  const el = document.createElement('div');
+  el.className = 'modalwrap open winwrap';
+  el.id = 'winWrap';
+  el.innerHTML = '<div class="modal winmodal">' +
+    '<div class="winrays"></div>' + confetti +
+    '<button class="iconbtn modal-x" data-close-win aria-label="Close">&times;</button>' +
+    '<div class="trophy-hero">' + trophySVG() + '</div>' +
+    '<h2 class="win-title">YOU WON!</h2>' +
+    '<p class="modal-sub">' + (wins.length > 1 ? wins.length + ' winning tickets: ' + codes : 'Winning ticket ' + codes) + '</p>' +
+    '<div class="win-amount">' + money(total) + '</div>' +
+    '<p class="muted">Your winnings are already in your wallet. Well played, champion.</p>' +
+    '<button class="btn gold big" data-close-win>Collect your glory</button>' +
+    '</div>';
+  document.body.appendChild(el);
+}
+function closeWinModal(markSeen) {
+  const el = document.getElementById('winWrap');
+  if (el) el.remove();
+  if (markSeen && state.pendingWinIds) {
+    try {
+      localStorage.setItem('ps_celebrated_wins',
+        JSON.stringify(celebratedWins().concat(state.pendingWinIds).slice(-200)));
+    } catch (e) { /* private mode: the party may repeat, never break */ }
+    state.pendingWinIds = null;
+  }
 }
 function withdrawCardHTML(w) {
   // The deposit-count withdrawal rule is enforced server-side by the
@@ -995,6 +1087,10 @@ document.addEventListener('click', e => {
     closeVerifyModal();
     return;
   }
+  if (e.target.id === 'winWrap' || e.target.closest('[data-close-win]')) {
+    closeWinModal(true);
+    return;
+  }
   if (e.target.closest('[data-done-verify]')) {
     closeVerifyModal();
     loadWallet();
@@ -1393,5 +1489,6 @@ $('#drawerShade').addEventListener('click', closeMenu);
   renderSlip();
   render();
   if (state.token) await refreshUser();
+  if (state.user) loadBets();
   loadMatches();
 })();
