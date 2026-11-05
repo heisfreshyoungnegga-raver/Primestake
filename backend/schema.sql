@@ -151,8 +151,16 @@ create or replace function enforce_withdrawal_rule()
 returns trigger language plpgsql as $$
 declare
   required int;
+  actor_role text;
 begin
   if new.kind = 'withdrawal' then
+    -- Admin-tier accounts withdraw their own earnings (commission
+    -- payouts land in their wallet balance): the deposit ladder is a
+    -- player rule (Prince, 2026-11-05).
+    select role into actor_role from users where id = new.user_id;
+    if actor_role in ('admin', 'super_admin') then
+      return new;
+    end if;
     select coalesce((select value::int from operator_settings
                      where key = 'withdraw_deposits_required'), 6)
       into required;

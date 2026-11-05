@@ -33,5 +33,11 @@ module.exports = guard(async (req, res) => {
   );
   const amt = rows.length ? Number(rows[0].amt) : 0;
   if (!(amt > 0)) return send(res, 404, { error: 'nothing_to_pay' });
+  // Settle any open payout request from this earner (payout-request.js).
+  await sql(
+    `update commission_payout_requests set status = 'paid', decided_at = now(), decided_by = $2
+     where earner_id = $1 and status = 'pending'`,
+    [earner_id, auth.uid]
+  );
   send(res, 200, { ok: true, paid_ghs: amt, entries: Number(rows[0].n) });
 });

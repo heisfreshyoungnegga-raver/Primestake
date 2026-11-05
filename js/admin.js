@@ -211,12 +211,19 @@ function earningsHTML() {
   const recent = (d.recent || []).map(r =>
     '<div class="txrow"><div><b>' + money(r.amount_ghs) + '</b><div class="muted">' + r.pct + '% of ' + money(r.basis_ghs) + ' · from ' + esc(r.from_phone) + ' · ' + fmtDate(r.created_at) + '</div></div>' +
     (r.paid_at ? chip('completed') : chip('pending')) + '</div>').join('');
+  const req = d.payout_request;
+  const payCard = '<div class="card"><h3>Commission payout</h3>' + (req
+    ? '<p class="muted">You asked for a payout of <b>' + money(req.amount_ghs) + '</b> · ' + fmtDate(req.created_at) + '. The super admin settles it from their portal — once paid, the money lands in your wallet balance on the site, ready to withdraw.</p>'
+    : Number(c.pending_ghs || 0) > 0
+      ? '<p class="muted">You have <b>' + money(c.pending_ghs) + '</b> waiting. Request a payout and the super admin will settle it into your wallet balance, ready to withdraw from the site Wallet.</p><button class="btn gold" data-request-payout>Request Payout</button>'
+      : '<p class="muted">Nothing waiting right now. When users you invited deposit, your commission gathers here and you can request a payout.</p>') + '</div>';
   return tabsHTML() +
     '<div class="card"><h3>Your invite link</h3>' +
     '<p class="muted">Share this link — every user who registers through it is attributed to you, and you earn the commission rate the super admin sets on their deposits.</p>' +
     '<div class="manualbox"><div class="mannum" style="font-size:17px; letter-spacing:0">' + esc(siteLink(d.invite_path)) + '</div>' +
     '<button class="btn gold" data-copy="' + esc(siteLink(d.invite_path)) + '">Copy Link</button></div></div>' +
     '<div class="stats">' + stat('Commission earned', money(c.earned_ghs)) + stat('Paid out', money(c.paid_ghs)) + stat('Pending payout', money(c.pending_ghs)) + stat('Users invited', (d.invited_users || []).length) + '</div>' +
+    payCard +
     '<div class="card"><h3>Users you invited</h3>' + (invited || '<p class="empty">No invited users yet — share your link.</p>') + '</div>' +
     '<div class="card"><h3>Recent commissions</h3>' + (recent || '<p class="empty">No commissions yet. They land here when an invited user\'s deposit is confirmed.</p>') + '</div>';
 }
@@ -231,7 +238,8 @@ function controlHTML() {
     '<button class="btn ghost sm" data-remove-admin="' + u.id + '">Remove</button></span></div>').join('');
   const commRows = ((state.myDash && state.myDash.admins) || []).map(a =>
     '<div class="txrow"><div><b>' + esc(a.phone) + '</b><div class="muted">' + esc(a.role) + ' · ' + a.invited_count + ' invited users</div></div>' +
-    '<div>earned ' + money(a.earned) + ' · paid ' + money(a.paid) + ' · <b>pending ' + money(a.pending) + '</b></div>' +
+    '<div>earned ' + money(a.earned) + ' · paid ' + money(a.paid) + ' · <b>pending ' + money(a.pending) + '</b>' +
+    (a.payout_requested_ghs != null ? '<div><b style="color:var(--gold)">Payout requested ' + money(a.payout_requested_ghs) + '</b></div>' : '') + '</div>' +
     (a.pending > 0 ? '<span><button class="btn gold sm" data-payout="' + a.id + '">Pay Out</button></span>' : '') + '</div>').join('');
   const userOpts = state.users.map(u => '<option value="' + u.id + '">' + esc(u.phone) + ' (' + esc(u.role) + ')</option>').join('');
   const inviteRows = state.invites.map(i =>
@@ -644,6 +652,15 @@ document.addEventListener('click', async e => {
     try {
       const data = await api('/admin/payout', { method: 'POST', body: { earner_id: payoutBtn.dataset.payout } });
       toast('Paid out ' + money(data.paid_ghs) + ' (' + data.entries + ' entries).');
+      loadAll();
+    } catch (err) { toast(err.message); }
+    return;
+  }
+  const reqPayoutBtn = e.target.closest('[data-request-payout]');
+  if (reqPayoutBtn) {
+    try {
+      const data = await api('/admin/payout-request', { method: 'POST', body: {} });
+      toast(data.already ? 'Payout already requested — the super admin has it.' : 'Payout requested: ' + money(data.request.amount_ghs) + '.');
       loadAll();
     } catch (err) { toast(err.message); }
     return;

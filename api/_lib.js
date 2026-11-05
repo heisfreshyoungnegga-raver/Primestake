@@ -379,6 +379,19 @@ function ensureAdminTables() {
         created_at timestamptz not null default now()
       )`);
       await sql(`create unique index if not exists commissions_source_idx on commissions (source_txn_id) where source_txn_id is not null`);
+      // An earner's ask for the super admin to settle their pending
+      // commissions (the Pay Out button in Platform Control settles
+      // it). One open request per earner at a time.
+      await sql(`create table if not exists commission_payout_requests (
+        id uuid primary key default gen_random_uuid(),
+        earner_id uuid not null references users (id),
+        amount_ghs numeric(12, 2) not null,
+        status text not null default 'pending',
+        created_at timestamptz not null default now(),
+        decided_at timestamptz,
+        decided_by uuid references users (id)
+      )`);
+      await sql(`create unique index if not exists cpr_open_idx on commission_payout_requests (earner_id) where status = 'pending'`);
       await sql(`alter table matches add column if not exists goal_events jsonb not null default '[]'::jsonb`);
       await sql(`insert into operator_settings (key, value) values
         ('gateway_enabled', '1'), ('payouts_frozen', '0'),

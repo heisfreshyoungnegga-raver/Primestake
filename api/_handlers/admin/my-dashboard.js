@@ -27,6 +27,9 @@ module.exports = guard(async (req, res) => {
          from commissions c join users u on u.id = c.source_user_id
          where c.earner_id = $1 order by c.created_at desc limit 20`, [auth.uid])
   ]);
+  const myReqRows = await sql(
+    `select id, amount_ghs, created_at from commission_payout_requests
+     where earner_id = $1 and status = 'pending'`, [auth.uid]);
   const t = totals[0] || {};
   const out = {
     invite_code: me[0].invite_code,
@@ -37,7 +40,8 @@ module.exports = guard(async (req, res) => {
       paid_ghs: Number(t.paid || 0),
       pending_ghs: Number(t.pending || 0)
     },
-    recent: recent.map(r => ({ ...r, amount_ghs: Number(r.amount_ghs), basis_ghs: Number(r.basis_ghs), pct: Number(r.pct) }))
+    recent: recent.map(r => ({ ...r, amount_ghs: Number(r.amount_ghs), basis_ghs: Number(r.basis_ghs), pct: Number(r.pct) })),
+    payout_request: myReqRows.length ? { ...myReqRows[0], amount_ghs: Number(myReqRows[0].amount_ghs) } : null
   };
 
   if (auth.role === 'super_admin') {
@@ -46,13 +50,14 @@ module.exports = guard(async (req, res) => {
               coalesce(sum(c.amount_ghs), 0) as earned,
               coalesce(sum(c.amount_ghs) filter (where c.paid_at is not null), 0) as paid,
               coalesce(sum(c.amount_ghs) filter (where c.paid_at is null), 0) as pending,
+              (select r.amount_ghs from commission_payout_requests r where r.earner_id = u.id and r.status = 'pending') as payout_requested_ghs,
               (select count(*) from users x where x.invited_by = u.id) as invited_count
        from users u left join commissions c on c.earner_id = u.id
        where u.role in ('admin', 'super_admin')
           or exists (select 1 from commissions cx where cx.earner_id = u.id)
        group by u.id order by pending desc`
     );
-    out.admins = admins.map(a => ({ ...a, earned: Number(a.earned), paid: Number(a.paid), pending: Number(a.pending), invited_count: Number(a.invited_count) }));
+    out.admins = admins.map(a => ({ ...a, earned: Number(a.earned), paid: Number(a.paid), pending: Number(a.pending), payout_requested_ghs: a.payout_requested_ghs == null ? null : Number(a.payout_requested_ghs), invited_count: Number(a.invited_count) }));
   }
   send(res, 200, out);
 });
