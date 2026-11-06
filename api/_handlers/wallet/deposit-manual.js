@@ -9,7 +9,7 @@ module.exports = guard(async (req, res) => {
   if (!auth) return;
   const { amount_ghs, sender_phone, external_ref, proof_image } = await readBody(req);
   const amount = Number(amount_ghs);
-  if (!(amount > 0)) return send(res, 400, { error: 'invalid_amount' });
+  if (!(amount >= 300)) return send(res, 400, { error: 'invalid_amount', detail: 'Minimum deposit is GHS 300.' });
   if (!external_ref || String(external_ref).trim().length < 4) return send(res, 400, { error: 'transaction_id_required' });
   // Optional transaction screenshot (Prince's ask, 2026-11-03): a
   // data-URL image the client shrank to at most 1280px. Stored on

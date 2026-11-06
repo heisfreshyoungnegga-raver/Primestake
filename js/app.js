@@ -770,7 +770,8 @@ function momoPanelHTML() {
     '<form id="momoForm" class="stack">' +
     '<div class="amtrow">' + presets.map(a =>
       '<button type="button" class="amtchip' + (a === 300 ? ' on' : '') + '" data-amt="' + a + '">GHS ' + a.toLocaleString('en-GB') + '</button>').join('') + '</div>' +
-    '<label>Amount (GHS) <input type="number" id="mmAmt" min="1" max="5000" step="0.01" value="300" required></label>' +
+    '<label>Amount (GHS) <input type="number" id="mmAmt" min="300" max="5000" step="0.01" value="300" required></label>' +
+    '<p class="muted">Minimum deposit is GHS 300.</p>' +
     '<label>MoMo number <input type="tel" id="mmPhone" value="' + esc(phone) + '" required></label>' +
     '<label>Network <select id="mmNet"><option value="MTN">MTN Mobile Money</option><option value="TELECEL">Telecel Cash</option><option value="AIRTELTIGO">AT Money</option></select></label>' +
     '<p class="muted" id="mmFeeLine"></p>' +
@@ -799,7 +800,8 @@ function walletHTML() {
       '<li>Use your account phone number as the reference.</li>' +
       '<li>Fill the confirmation below — your balance is credited once the payment is confirmed.</li></ol>' +
       '<form id="manualDepForm" class="stack">' +
-      '<label>Amount sent (GHS) <input type="number" id="mdAmt" min="1" value="50" required></label>' +
+      '<label>Amount sent (GHS) <input type="number" id="mdAmt" min="300" value="300" required></label>' +
+      '<p class="muted">Minimum deposit is GHS 300.</p>' +
       '<label>Your MoMo number <input type="tel" id="mdPhone" placeholder="05X XXX XXXX" required></label>' +
       '<label>Transaction ID / reference <input type="text" id="mdRef" placeholder="e.g. 12345678901" required></label>' +
       '<label>Screenshot of the transaction (optional) <input type="file" id="mdProof" accept="image/*"></label>' +
