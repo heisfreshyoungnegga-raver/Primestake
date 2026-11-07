@@ -205,6 +205,7 @@ function rowHTML(m) {
     '<span class="tname">' + esc(name) + '</span>' +
     (score != null ? '<span class="tscore">' + score + '</span>' : '') + '</div>';
   return '<div class="mrow" data-match="' + m.id + '">' +
+    (m.status === 'live' ? LIVE_BADGE : '') +
     '<div class="mtime">' + time + '</div>' +
     '<div class="mteams"><div class="league">' + esc(m.league) + '</div>' +
     teamLine(m.home, m.home_logo, m.status === 'live' ? m.sh : null) +
@@ -238,7 +239,7 @@ function matchDetailsHTML() {
     ? '<span class="live-min">' + (m.minute != null ? m.minute + '&prime;' : 'LIVE') + '</span>'
     : esc(fmtDate(m.starts_at));
   const team = (name, logo, score) => '<div class="team">' + (logo ? '<img class="tlogo" src="' + esc(logo) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '<span class="tname">' + esc(name) + '</span>' + (score != null ? '<span class="tscore">' + score + '</span>' : '') + '</div>';
-  let html = back + '<div class="card"><div class="league">' + esc(m.league) + '</div>' +
+  let html = back + '<div class="card md-card">' + (m.status === 'live' ? LIVE_BADGE : '') + '<div class="league">' + esc(m.league) + '</div>' +
     '<div class="md-when">' + when + '</div>' +
     '<div class="md-teams">' + team(m.home, m.home_logo, m.status === 'live' ? m.sh : null) + team(m.away, m.away_logo, m.status === 'live' ? m.sa : null) + '</div></div>';
   const oddBtn = (market, o) => {
@@ -441,6 +442,10 @@ function statusChip(s) {
   const label = s === 'cashed_out' ? 'CASHED OUT' : String(s).toUpperCase();
   return '<span class="st st-' + cls + '">' + label + '</span>';
 }
+// Small red LIVE pill pinned to a live match card's top-right corner
+// (Prince's ask 2026-11-07) — used by the home list, match details and
+// betslip selections; admin.js carries its own copy for the portals.
+const LIVE_BADGE = '<span class="livebadge">LIVE</span>';
 function profileHTML() {
   if (!state.user) {
     return '<div class="profile"><h2>ME Profile</h2>' +
@@ -969,12 +974,13 @@ function renderSlip() {
     foot.innerHTML = '';
     return;
   }
-  body.innerHTML = [...state.slip.entries()].map(([key, s]) =>
-    '<div class="sel"><div class="s-top"><span class="s-match">' + esc(s.matchLabel) + '</span>' +
+  body.innerHTML = [...state.slip.entries()].map(([key, s]) => {
+    const mm = state.matches.find(x => x.id === s.matchId);
+    return '<div class="sel">' + (mm && mm.status === 'live' ? LIVE_BADGE : '') + '<div class="s-top"><span class="s-match">' + esc(s.matchLabel) + '</span>' +
     '<button class="rm" data-rm="' + esc(key) + '">Remove</button></div>' +
     '<span class="s-pick">' + esc(s.league) + ' · ' + esc(s.market) + ' · ' + esc(s.pick) + '</span>' +
-    '<span class="s-odd">' + s.odd.toFixed(2) + '</span></div>'
-  ).join('');
+    '<span class="s-odd">' + s.odd.toFixed(2) + '</span></div>';
+  }).join('');
   const total = [...state.slip.values()].reduce((acc, s) => acc * s.odd, 1);
   foot.innerHTML =
     '<div class="row"><span>Stake (GHS)</span><input type="number" id="stakeIn" min="1" value="10"></div>' +

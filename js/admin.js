@@ -171,7 +171,7 @@ function matchesHTML() {
     const chipHtml = ds === 'live'
       ? '<span class="st st-live">● LIVE' + (m.display_minute != null ? ' ' + m.display_minute + "'" : '') + '</span>'
       : chip(ds);
-    return '<div class="txrow"><div><b>' + esc(m.home_team) + ' vs ' + esc(m.away_team) + '</b>' +
+    return '<div class="txrow">' + (ds === 'live' ? '<span class="livebadge">LIVE</span>' : '') + '<div><b>' + esc(m.home_team) + ' vs ' + esc(m.away_team) + '</b>' +
     '<div class="muted">' + (m.external_ref && String(m.external_ref).indexOf('espn:') === 0 ? 'ESPN · ' : m.external_ref && String(m.external_ref).indexOf('custom:') === 0 ? 'Featured · ' : 'Manual · ') + esc(m.league) + ' · ' + fmtDate(m.starts_at) + stateBit + '</div></div>' +
     chipHtml +
     '<span>' +
