@@ -720,6 +720,28 @@ function closeVerifyModal() {
   const el = $('#verifyWrap');
   if (el) el.remove();
 }
+// Withdrawal sent confirmation (Prince's reference screenshot,
+// 2026-11-07): shown the moment a withdrawal request succeeds —
+// Transactions goes to the wallet history, Home goes back to the
+// match list. Replaces the old plain toast.
+function showWithdrawSentModal() {
+  closeWithdrawSentModal();
+  const el = document.createElement('div');
+  el.className = 'modalwrap open';
+  el.id = 'wdSentWrap';
+  el.innerHTML = '<div class="modal wdmodal">' +
+    '<h2>Withdrawal sent</h2>' +
+    '<p class="wdmsg">Your withdrawal is on its way. It is usually paid within a few minutes.</p>' +
+    '<div class="wdfoot">' +
+    '<button type="button" data-wd-tx>Transactions</button>' +
+    '<button type="button" data-wd-home>Home</button>' +
+    '</div></div>';
+  document.body.appendChild(el);
+}
+function closeWithdrawSentModal() {
+  const el = $('#wdSentWrap');
+  if (el) el.remove();
+}
 /* ----- Instant MoMo deposit (ShinobiPay direct push) ----- */
 function detectNetworkJS(raw) {
   const digits = String(raw || '').replace(/[\s+]/g, '');
@@ -1164,6 +1186,24 @@ document.addEventListener('click', e => {
     closeVerifyModal();
     return;
   }
+  if (e.target.id === 'wdSentWrap') {
+    closeWithdrawSentModal();
+    return;
+  }
+  if (e.target.closest('[data-wd-tx]')) {
+    closeWithdrawSentModal();
+    state.view = 'wallet';
+    state.walletSection = 'history';
+    loadWallet();
+    render();
+    return;
+  }
+  if (e.target.closest('[data-wd-home]')) {
+    closeWithdrawSentModal();
+    state.view = 'home';
+    render();
+    return;
+  }
   if (e.target.id === 'winWrap' || e.target.closest('[data-close-win]')) {
     closeWinModal(true);
     return;
@@ -1354,7 +1394,7 @@ document.addEventListener('submit', async e => {
         method: 'POST',
         body: { amount_ghs: parseFloat($('#wdAmt').value) || 0, method: $('#wdMethod').value }
       });
-      toast('Withdrawal requested — the amount is held and paid out after review.');
+      showWithdrawSentModal();
       loadWallet();
     } catch (err) {
       if (err.code === 'withdrawal_locked') { showVerifyModal(err.data || {}); return; }

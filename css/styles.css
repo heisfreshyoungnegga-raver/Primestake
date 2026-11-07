@@ -871,6 +871,25 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 @keyframes livepulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 .mrow, .sel, .txrow, .md-card { position: relative; }
 .mrow:has(.livebadge) { padding-top: 24px; }
+
+/* ---------- withdrawal sent confirmation ---------- */
+/* Prince's reference screenshot (2026-11-07): after a withdrawal
+   request succeeds, a clean white card confirms it — bold title, one
+   calm line, and a split gold footer: Transactions | Home. */
+.modal.wdmodal {
+  background: #fff; color: #1c1c1e; text-align: center;
+  border-radius: 18px; padding: 26px 22px 0; overflow: hidden;
+  max-width: 400px;
+}
+.wdmodal h2 { margin: 0 0 10px; font-size: 21px; font-weight: 800; color: #111; }
+.wdmodal .wdmsg { margin: 0 6px 22px; color: #6e6e73; font-size: 15px; line-height: 1.45; }
+.wdfoot { display: flex; border-top: 1px solid #e5e5e5; margin: 0 -22px; }
+.wdfoot button {
+  flex: 1; background: none; border: 0; padding: 15px 0; cursor: pointer;
+  font-size: 16px; font-weight: 700; color: #b8860b; font-family: inherit;
+}
+.wdfoot button + button { border-left: 1px solid #e5e5e5; }
+.wdfoot button:active { background: #faf6e9; }
 .manualbox {
   background: var(--card-dark); color: var(--header-ink); border-radius: var(--radius);
   padding: 16px; text-align: center; display: grid; gap: 5px; justify-items: center; margin-bottom: 12px;
