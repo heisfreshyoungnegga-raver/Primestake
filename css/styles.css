@@ -845,6 +845,12 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   border: 1px solid var(--line); background: var(--surface); color: var(--ink);
 }
 .wtabs button.on { background: var(--header-bg); color: var(--accent); border-color: var(--header-bg); }
+.wtabs .cnt {
+  display: inline-block; min-width: 20px; padding: 1px 6px; border-radius: 99px;
+  background: var(--gold, #f5c518); color: #111; font-size: 11.5px; font-weight: 800;
+  vertical-align: 1px;
+}
+.wtabs button.on .cnt { background: var(--accent); color: var(--header-bg); }
 .manualbox {
   background: var(--card-dark); color: var(--header-ink); border-radius: var(--radius);
   padding: 16px; text-align: center; display: grid; gap: 5px; justify-items: center; margin-bottom: 12px;

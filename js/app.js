@@ -21,6 +21,7 @@ const state = {
   matchesLoaded: false,
   offline: false,
   myBets: [],
+  betTab: 'ongoing',
   wallet: null,
   walletTab: 'instant',
   walletSection: 'deposit',
@@ -519,10 +520,28 @@ function betCardHTML(b) {
 }
 function betsHTML() {
   if (!state.user) return gateHTML('My Bets');
-  const anyOffer = state.myBets.some(b => b.status === 'open' && b.cashout_offer);
-  return '<h2>My Bets</h2>' +
+  // Sorted tabs (Prince's ask 2026-11-07): Ongoing = open tickets,
+  // Settled = won or cashed out, Lost = lost. Counts ride on the tabs.
+  const tab = state.betTab || 'ongoing';
+  const groups = {
+    ongoing: state.myBets.filter(b => b.status === 'open'),
+    settled: state.myBets.filter(b => b.status === 'won' || b.status === 'cashed_out'),
+    lost: state.myBets.filter(b => b.status === 'lost'),
+  };
+  const tabBtn = (key, label) =>
+    '<button class="' + (tab === key ? 'on' : '') + '" data-btab="' + key + '">' + label +
+    ' <span class="cnt">' + groups[key].length + '</span></button>';
+  const tabs = '<div class="wtabs btabs">' + tabBtn('ongoing', 'Ongoing') +
+    tabBtn('settled', 'Settled') + tabBtn('lost', 'Lost') + '</div>';
+  const emptyMsg = {
+    ongoing: 'No ongoing bets — your open tickets will show here.',
+    settled: 'No settled bets yet — won and cashed-out tickets land here.',
+    lost: 'No lost bets. Keep it that way.',
+  }[tab];
+  const anyOffer = tab === 'ongoing' && groups.ongoing.some(b => b.cashout_offer);
+  return '<h2>My Bets</h2>' + tabs +
     (anyOffer ? '<div class="card cashbar"><b>Cashout available now!</b><p class="muted">Settle an open ticket early and take the offer on it below.</p></div>' : '') +
-    (state.myBets.length ? state.myBets.map(betCardHTML).join('') : '<p class="empty">No bets yet — add odds to your slip and place your first bet.</p>');
+    (groups[tab].length ? groups[tab].map(betCardHTML).join('') : '<p class="empty">' + emptyMsg + '</p>');
 }
 async function loadBets() {
   try {
@@ -1228,6 +1247,8 @@ document.addEventListener('click', e => {
   }
   const wt = e.target.closest('[data-wtab]');
   if (wt) { state.walletTab = wt.dataset.wtab; render(); return; }
+  const bt = e.target.closest('[data-btab]');
+  if (bt) { state.betTab = bt.dataset.btab; render(); return; }
   const wsec = e.target.closest('[data-wsec]');
   if (wsec) { state.walletSection = wsec.dataset.wsec; render(); return; }
   if (e.target.closest('[data-momo-cancel]') || e.target.closest('[data-momo-reset]')) {
