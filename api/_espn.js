@@ -20,6 +20,12 @@ const LEAGUES = {
   'uefa.europa': 'UEFA Europa League',
   'gha.1': 'Ghana Premier League',
   'usa.1': 'MLS',
+  // International competitions. Without these the board empties
+  // for every international break (2026-11-08: club leagues dark
+  // 9-17 Nov, only internationals playing, none imported).
+  'uefa.nations': 'UEFA Nations League',
+  'concacaf.nations.league': 'Concacaf Nations League',
+  'fifa.friendly': 'International Friendlies',
 };
 
 function americanToDecimal(v) {
@@ -211,13 +217,15 @@ async function syncLeagues(leagues, offsets) {
   return { report, imported, withOdds };
 }
 
-// Light refresh: yesterday + today for every league, all in parallel.
-// This is what turns matches live, moves their scores and minutes, and
-// retires finished ones — in seconds rather than a 99-call sweep.
+// Light refresh: yesterday through three days ahead for every
+// league, all in parallel. This is what turns matches live, moves
+// their scores and minutes, retires finished ones, and keeps the
+// upcoming list stocked days before kickoff instead of only on
+// the day itself.
 async function refreshToday() {
   const jobs = [];
   for (const slug of Object.keys(LEAGUES)) {
-    for (const offset of [-1, 0]) {
+    for (const offset of [-1, 0, 1, 2, 3]) {
       jobs.push(
         fetchDay(slug, ymdOf(offset))
           .then(async data => {
