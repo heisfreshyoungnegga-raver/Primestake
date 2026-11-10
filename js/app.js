@@ -12,6 +12,7 @@ const state = {
   query: '',
   filtersOpen: false,
   matchId: null, prevView: 'home',
+  ticketId: null,
   cashoutArm: null,
   slip: new Map(), // key -> {matchId, matchLabel, league, market, pick, odd}
   user: null,
@@ -521,7 +522,8 @@ function betCardHTML(b) {
     '<div class="card-row"><span>Total odds</span><b>' + Number(b.total_odds).toFixed(2) + '</b></div>' +
     (won
       ? '<div class="card-row"><span>Winnings</span><b class="winamt">' + money(b.potential_ghs) + '</b></div>'
-      : '<div class="card-row"><span>Potential win</span><b>' + money(b.potential_ghs) + '</b></div>') + foot + '</div>';
+      : '<div class="card-row"><span>Potential win</span><b>' + money(b.potential_ghs) + '</b></div>') + foot +
+    (b.id ? '<button class="btn ghost big td-open" data-ticket="' + b.id + '">Ticket Details ›</button>' : '') + '</div>';
 }
 function betsHTML() {
   if (!state.user) return gateHTML('My Bets');
@@ -548,12 +550,164 @@ function betsHTML() {
     (anyOffer ? '<div class="card cashbar"><b>Cashout available now!</b><p class="muted">Settle an open ticket early and take the offer on it below.</p></div>' : '') +
     (groups[tab].length ? groups[tab].map(betCardHTML).join('') : '<p class="empty">' + emptyMsg + '</p>');
 }
+/* ----- Ticket Details (Prince's WinXBet-style reference, 2026-11-10):
+   a full-screen ticket view — deep-green panel, summary, Share Ticket /
+   Show Off, a verify-code strip and one timeline card per leg with the
+   final score pills and Pick / Market / Outcome rows. Used by My Bets
+   (tap Ticket Details on a card) and by the public Verify Bet result,
+   so any ticket looks the same wherever it is opened. ----- */
+function moneyBig(n) {
+  return 'GHS ' + Number(n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtShortDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+}
+function fmtShortTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+function pickLabel(market, pick) {
+  if (market === '1X2') {
+    if (pick === '1') return 'Home';
+    if (pick === 'X') return 'Draw';
+    if (pick === '2') return 'Away';
+  }
+  return String(pick == null ? '' : pick);
+}
+function legScore(l) {
+  const h = l.live_home != null ? l.live_home : l.score_home;
+  const a = l.live_away != null ? l.live_away : l.score_away;
+  if (h == null || a == null) return null;
+  return { h: Number(h), a: Number(a) };
+}
+function legState(l) {
+  if (l.result === 'won') return 'won';
+  if (l.result === 'lost') return 'lost';
+  if (l.match_status === 'live' || l.live_minute != null) return 'live';
+  return 'pending';
+}
+function legOutcome(l, st) {
+  const sc = legScore(l);
+  if (st === 'live' && sc) return 'Live ' + sc.h + '-' + sc.a;
+  if (!sc) return st === 'won' ? pickLabel(l.market, l.pick) : 'Pending';
+  if (l.market === 'Correct Score') return sc.h + '-' + sc.a;
+  if (l.market === 'Both Teams To Score') return sc.h > 0 && sc.a > 0 ? 'Yes' : 'No';
+  const ou = /^Over\/Under ([\d.]+)$/.exec(l.market || '');
+  if (ou) return (sc.h + sc.a > parseFloat(ou[1]) ? 'Over ' : 'Under ') + ou[1];
+  return sc.h > sc.a ? 'Home' : sc.h < sc.a ? 'Away' : 'Draw';
+}
+function tdBarHTML() {
+  return '<div class="td-bar">' +
+    '<button class="td-back" data-back aria-label="Back">‹ Back</button>' +
+    '<span class="td-title">Ticket Details</span>' +
+    '<span class="td-bar-icons">' +
+    '<button class="td-icon" data-nav="support" aria-label="Support"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="2"/><rect x="17" y="14" width="4" height="6" rx="2"/><path d="M19 20a4 4 0 0 1-4 2h-2"/></svg></button>' +
+    '<button class="td-icon" data-nav="home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9h13v-9"/></svg></button>' +
+    '</span></div>';
+}
+function tdLegHTML(l) {
+  const st = legState(l);
+  const sc = legScore(l);
+  const node = st === 'won'
+    ? '<span class="td-node won"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5 10 18 19.5 6.5"/></svg></span>'
+    : st === 'lost'
+      ? '<span class="td-node lost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span>'
+      : st === 'live'
+        ? '<span class="td-node live"><i></i></span>'
+        : '<span class="td-node pending"><i></i></span>';
+  const pill = st === 'won' ? '<span class="td-pill won">WON</span>'
+    : st === 'lost' ? '<span class="td-pill lost">LOST</span>'
+    : st === 'live' ? '<span class="td-pill live">LIVE' + (l.live_minute != null ? ' ' + l.live_minute + '&prime;' : '') + '</span>'
+    : '<span class="td-pill pending">PENDING</span>';
+  const greenSide = sc ? (sc.h > sc.a ? 'home' : sc.a > sc.h ? 'away' : 'home') : null;
+  const teamRow = (side, name, score) =>
+    '<div class="td-team"><span class="td-dot' + (greenSide === side ? ' on' : '') + '"></span>' +
+    '<span class="td-teamname">' + esc(name || '') + '</span>' +
+    (sc ? '<span class="td-score">' + score + '</span>' : '') + '</div>';
+  return '<div class="td-leg">' + node +
+    '<div class="td-legcard">' +
+    '<div class="td-legtop"><span>' + (l.starts_at ? fmtShortDate(l.starts_at) + ', ' + fmtShortTime(l.starts_at) : esc(l.league || '')) + '</span>' + pill + '</div>' +
+    teamRow('home', l.home_team, sc ? sc.h : null) +
+    teamRow('away', l.away_team, sc ? sc.a : null) +
+    '<div class="td-kv"><span>Pick</span><b>' + esc(pickLabel(l.market, l.pick)) + ' <span class="td-odd">@ ' + Number(l.odds).toFixed(2) + '</span></b></div>' +
+    '<div class="td-kv"><span>Market</span><b>' + esc(l.market || '') + '</b></div>' +
+    '<div class="td-kv"><span>Outcome</span><b class="' + (st === 'won' ? 'td-out-won' : st === 'lost' ? 'td-out-lost' : '') + '">' + esc(legOutcome(l, st)) + '</b></div>' +
+    '<span class="td-watermark">' + trophySVG('td-trophy') + '</span>' +
+    '</div></div>';
+}
+function ticketDetailsHTML(b, opts) {
+  opts = opts || {};
+  const legs = b.selections || [];
+  const won = b.status === 'won';
+  const statusPill = won
+    ? '<span class="td-status won">' + trophySVG('td-chip-trophy') + ' Won</span>'
+    : b.status === 'cashed_out' ? '<span class="td-status won">' + trophySVG('td-chip-trophy') + ' Cashed Out</span>'
+    : b.status === 'lost' ? '<span class="td-status lost">Lost</span>'
+    : '<span class="td-status open">Open</span>';
+  const ret = won
+    ? { label: 'Total PrimeStake Return', amt: moneyBig(b.potential_ghs), cls: 'td-amt' }
+    : b.status === 'cashed_out'
+      ? { label: 'Cashed Out', amt: moneyBig(b.cashout_ghs != null ? b.cashout_ghs : b.potential_ghs), cls: 'td-amt' }
+      : b.status === 'lost'
+        ? { label: 'Total PrimeStake Return', amt: moneyBig(0), cls: 'td-amt lost' }
+        : { label: 'Potential Return', amt: moneyBig(b.potential_ghs), cls: 'td-amt' };
+  let buttons = '<div class="td-btns">' +
+    '<button class="td-btn share" data-share-ticket="' + esc(b.code) + '">' +
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="6" cy="12" r="2.6"/><circle cx="17.5" cy="5.5" r="2.6"/><circle cx="17.5" cy="18.5" r="2.6"/><path d="M8.3 10.7 15.2 6.9M8.3 13.3l6.9 3.8"/></svg> Share Ticket</button>';
+  if (won && !opts.publicView) {
+    buttons += '<button class="td-btn showoff" data-showoff="' + b.id + '">' + trophySVG('td-btn-trophy') + ' Show Off</button>';
+  }
+  buttons += '</div>';
+  if (!opts.publicView && b.status === 'open' && b.cashout_offer) {
+    const armed = state.cashoutArm && state.cashoutArm.id === b.id && Date.now() - state.cashoutArm.at < 5000;
+    buttons += '<button class="btn gold big td-cashout" data-cashout="' + b.id + '">' +
+      (armed ? 'Tap again to confirm — ' : '') + 'Cashout ' + money(b.cashout_offer) + '</button>';
+  }
+  return '<div class="td">' + tdBarHTML() +
+    '<div class="td-panel">' +
+    '<div class="td-idrow"><span>Ticket ID - <b>' + esc(b.code) + '</b></span><span>' +
+    fmtShortDate(b.placed_at) + ', ' + fmtShortTime(b.placed_at) + '</span></div>' +
+    '<div class="td-typerow"><b>' + (legs.length > 1 ? 'Multiple' : 'Single') + '</b>' + statusPill + '</div>' +
+    '<div class="td-retrow"><span>' + ret.label + '</span><b class="' + ret.cls + '">' + ret.amt + '</b></div>' +
+    '<div class="td-kv2"><span>Total Stake</span><b>' + moneyBig(b.stake_ghs) + '</b></div>' +
+    '<div class="td-kv2"><span>Total Odds</span><b>' + Number(b.total_odds).toFixed(2) + '</b></div>' +
+    buttons +
+    '<button class="td-verify" data-copy-code="' + esc(b.code) + '">' + trophySVG('td-strip-trophy') +
+    '<span>Verify Code</span><b>' + esc(b.code) + '</b></button>' +
+    '</div>' +
+    '<div class="td-legs">' + legs.map(tdLegHTML).join('') + '</div>' +
+    '</div>';
+}
+function ticketHTML() {
+  const b = (state.myBets || []).find(x => x.id === state.ticketId);
+  if (!b) return '<div class="td">' + tdBarHTML() + '<p class="empty td-loading">Loading ticket…</p></div>';
+  return ticketDetailsHTML(b);
+}
+function copyText(text, doneMsg) {
+  const done = () => toast(doneMsg);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => toast(text));
+  } else { toast(text); }
+}
+function shareTicket(code) {
+  const b = (state.myBets || []).find(x => x.code === code);
+  const wonLine = b && b.status === 'won' ? ' just WON ' + money(b.potential_ghs) : '';
+  const text = 'My PrimeStake ticket ' + code + wonLine + '! Verify it with the ticket code at primesstake.site';
+  if (navigator.share) {
+    navigator.share({ title: 'PrimeStake Ticket ' + code, text }).catch(() => {});
+  } else {
+    copyText(text, 'Ticket share text copied — paste it anywhere');
+  }
+}
 async function loadBets() {
   try {
     const data = await api('/bets/mine');
     state.myBets = data.bets;
   } catch (e) { state.myBets = []; }
-  if (state.view === 'bets') render();
+  if (state.view === 'bets' || state.view === 'ticket') render();
   maybeCelebrateWins();
   // While any leg is live, keep My Bets fresh on its own so the
   // score and minute move without the player refreshing.
@@ -960,6 +1114,7 @@ function viewHTML() {
     case 'games': return gamesHTML();
     case 'profile': return profileHTML();
     case 'bets': return betsHTML();
+    case 'ticket': return ticketHTML();
     case 'wallet': return walletHTML();
     case 'verify': return verifyHTML();
     case 'booking': return bookingHTML();
@@ -1237,6 +1392,25 @@ document.addEventListener('click', e => {
       .catch(err => { errToast(err, 'Cashout failed.'); loadBets(); });
     return;
   }
+  const tkBtn = e.target.closest('[data-ticket]');
+  if (tkBtn) {
+    state.ticketId = tkBtn.dataset.ticket;
+    state.prevView = 'bets';
+    state.view = 'ticket';
+    render();
+    window.scrollTo(0, 0);
+    return;
+  }
+  const shBtn = e.target.closest('[data-share-ticket]');
+  if (shBtn) { shareTicket(shBtn.dataset.shareTicket); return; }
+  const soBtn = e.target.closest('[data-showoff]');
+  if (soBtn) {
+    const b = (state.myBets || []).find(x => x.id === soBtn.dataset.showoff);
+    if (b) showWinModal([b], Number(b.potential_ghs || 0));
+    return;
+  }
+  const ccBtn = e.target.closest('[data-copy-code]');
+  if (ccBtn) { copyText(ccBtn.dataset.copyCode, 'Verify code copied: ' + ccBtn.dataset.copyCode); return; }
   const mrow = e.target.closest('[data-match]');
   if (mrow && !e.target.closest('button, a, input, select, textarea')) {
     state.prevView = ['home', 'live', 'sports', 'virtual'].includes(state.view) ? state.view : 'home';
@@ -1406,11 +1580,11 @@ document.addEventListener('submit', async e => {
     try {
       const data = await api('/bets/verify?code=' + encodeURIComponent(code));
       const t = data.ticket;
-      state.verifyResult = betCardHTML({
+      state.verifyResult = ticketDetailsHTML({
         code: t.code, status: t.status, placed_at: t.placed_at,
         stake_ghs: t.stake_ghs, total_odds: t.total_odds, potential_ghs: t.potential_ghs,
         selections: t.selections,
-      });
+      }, { publicView: true });
     } catch (err) {
       state.verifyResult = '<div class="card"><b>Ticket not found</b><p class="muted">No bet carries the code ' + esc(code) + '.</p></div>';
     }

@@ -8,7 +8,9 @@ module.exports = guard(async (req, res) => {
             coalesce(json_agg(json_build_object(
               'match_id', s.match_id, 'market', s.market, 'pick', s.pick,
               'odds', s.odds, 'result', s.result,
-              'home_team', m.home_team, 'away_team', m.away_team, 'league', m.league
+              'home_team', m.home_team, 'away_team', m.away_team, 'league', m.league,
+              'starts_at', m.starts_at, 'match_status', m.status,
+              'score_home', m.score_home, 'score_away', m.score_away
             ) order by s.id) filter (where s.id is not null), '[]') as selections
      from bets b
      left join bet_selections s on s.bet_id = b.id

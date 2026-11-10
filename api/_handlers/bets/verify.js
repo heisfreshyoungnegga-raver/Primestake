@@ -6,7 +6,8 @@ module.exports = guard(async (req, res) => {
   if (!code) return send(res, 400, { error: 'code_required' });
   const rows = await sql(
     `select b.code, b.stake_ghs, b.total_odds, b.potential_ghs, b.status, b.placed_at,
-            m.home_team, m.away_team, m.league, s.market, s.pick, s.odds, s.result
+            m.home_team, m.away_team, m.league, s.market, s.pick, s.odds, s.result,
+            m.starts_at, m.status as match_status, m.score_home, m.score_away
      from bets b
      left join bet_selections s on s.bet_id = b.id
      left join matches m on m.id = s.match_id
@@ -22,7 +23,9 @@ module.exports = guard(async (req, res) => {
       potential_ghs: Number(head.potential_ghs), status: head.status, placed_at: head.placed_at,
       selections: rows.filter(r => r.market).map(r => ({
         home_team: r.home_team, away_team: r.away_team, league: r.league,
-        market: r.market, pick: r.pick, odds: Number(r.odds), result: r.result
+        market: r.market, pick: r.pick, odds: Number(r.odds), result: r.result,
+        starts_at: r.starts_at, match_status: r.match_status,
+        score_home: r.score_home, score_away: r.score_away
       }))
     }
   });
