@@ -498,7 +498,13 @@ function betCardHTML(b) {
       res = '<span class="st st-live">● LIVE' + (l.live_minute != null ? ' ' + l.live_minute + '&prime;' : '') + '</span> <b>' +
         (l.live_home || 0) + '-' + (l.live_away || 0) + '</b>';
     } else if (l.match_status === 'finished') {
-      res = '<span class="legres">FT ' + (l.live_home || 0) + '-' + (l.live_away || 0) + '</span>';
+      // Settled legs carry no live_home/live_away (mine.js only attaches
+      // those to OPEN bets) — fall back to the stored final score, the
+      // same legScore() the Ticket Details view uses. Without this the
+      // card printed FT 0-0 on every settled ticket (Prince's report,
+      // ticket PB-2LX48Z, 2026-11-10).
+      const fs = legScore(l);
+      res = '<span class="legres">FT ' + (fs ? fs.h : 0) + '-' + (fs ? fs.a : 0) + '</span>';
     } else {
       res = '<span class="legres">' + esc(l.result || '') + '</span>';
     }
