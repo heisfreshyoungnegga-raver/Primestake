@@ -35,6 +35,26 @@ module.exports = guard(async (req, res) => {
   if (!net) return send(res, 400, { error: 'invalid_network', detail: 'Pick the network for that number.' });
 
   await ensurePaymentTables();
+  // Anti-storm guard (ported from Oddaroa push 109, 2026-11-11):
+  // ShinobiPay temp-blocks numbers, and rapid retries keep the block
+  // alive. Refuse early, WITHOUT poking the provider, when this number
+  // already has a prompt in flight (<10 min) or was blocked within the
+  // last 30 minutes. PrimeStake's 2026-11-11 morning: 23 attempts, 13
+  // died number_blocked, 3 payment_in_progress, only 1 succeeded.
+  const lastTry = await sql(
+    `select status, fail_reason, created_at from payment_attempts
+     where phone = $1 order by created_at desc limit 1`,
+    [intl]
+  );
+  if (lastTry.length) {
+    const ageMin = (Date.now() - new Date(lastTry[0].created_at).getTime()) / 60000;
+    if ((lastTry[0].status === 'awaiting' || lastTry[0].status === 'created') && ageMin < 10) {
+      return send(res, 409, { error: 'payment_in_progress', detail: 'A payment prompt is already waiting for this number — approve it on the phone, or wait a few minutes for it to expire before trying again.' });
+    }
+    if (lastTry[0].fail_reason === 'number_blocked' && ageMin < 30) {
+      return send(res, 429, { error: 'number_blocked', detail: 'This phone number is temporarily blocked by the payment provider. Please wait about 30 minutes before trying again — repeated tries can extend the block.' });
+    }
+  }
   // One attempt row per try. Its reference is unique per merchant account
   // and its id doubles as the Idempotency-Key, so a retry of THIS call
   // can never create a second charge.
