@@ -24,7 +24,7 @@ const state = {
   myBets: [],
   betTab: 'ongoing',
   wallet: null,
-  walletTab: 'instant',
+  walletTab: 'manual',
   walletSection: 'deposit',
   referrals: null,
   momo: null,
@@ -943,6 +943,8 @@ function startMomoPoll() {
     } catch (e) { /* keep waiting — the webhook is the real signal */ }
   }, 4000);
 }
+// Kept for reference only — instant MoMo panel, unreachable since
+// 2026-11-12 (automatic deposits removed; gateway off in settings).
 function momoPanelHTML() {
   const m = state.momo;
   if (state.momoOff) {
@@ -996,9 +998,10 @@ function walletHTML() {
     '<div class="' + (t.amount_ghs >= 0 ? 'amt pos' : 'amt') + '">' + (t.amount_ghs >= 0 ? '+' : '−') + 'GHS ' + Math.abs(t.amount_ghs).toFixed(2) + '</div>' +
     statusChip(t.status) + '</div>').join('');
   const md = w.manual_deposit;
-  const manual = state.walletTab === 'manual';
-  const depositPanel = manual
-    ? '<div class="card"><h3>Manual transfer — ' + esc(md.network) + '</h3>' +
+  // Manual transfer is the only deposit method now (Prince, 2026-11-12:
+  // automatic ShinobiPay deposits removed; gateway_enabled = '0' in
+  // operator_settings and /wallet/deposit-momo answers 503).
+  const depositPanel = '<div class="card"><h3>Manual transfer — ' + esc(md.network) + '</h3>' +
       '<div class="manualbox"><div class="muted">Send money to</div>' +
       '<div class="mannum">' + esc(md.number.replace(/(\d{4})(\d{3})(\d{3})/, '$1 $2 $3')) + '</div>' +
       '<div class="manname">' + esc(md.name) + '</div>' +
@@ -1015,8 +1018,7 @@ function walletHTML() {
       '<label>Your MoMo number <input type="tel" id="mdPhone" placeholder="05X XXX XXXX" required></label>' +
       '<label>Transaction ID / reference <input type="text" id="mdRef" placeholder="e.g. 12345678901" required></label>' +
       '<label>Screenshot of the transaction (optional) <input type="file" id="mdProof" accept="image/*"></label>' +
-      '<button class="btn gold big" type="submit">I Have Sent It — Confirm Deposit</button></form></div>'
-    : momoPanelHTML();
+      '<button class="btn gold big" type="submit">I Have Sent It — Confirm Deposit</button></form></div>';
   // Deposit, Withdraw and History are separate views inside the wallet.
   const sec = state.walletSection;
   const sectionTabs = '<div class="wtabs">' +
@@ -1024,8 +1026,7 @@ function walletHTML() {
       '<button class="' + (sec === k ? 'on' : '') + '" data-wsec="' + k + '">' + label + '</button>').join('') + '</div>';
   let sectionBody = '';
   if (sec === 'deposit') {
-    sectionBody = '<div class="wtabs"><button class="' + (manual ? '' : 'on') + '" data-wtab="instant">Mobile Money</button>' +
-      '<button class="' + (manual ? 'on' : '') + '" data-wtab="manual">Manual transfer</button></div>' + depositPanel;
+    sectionBody = depositPanel;
   } else if (sec === 'withdraw') {
     sectionBody = withdrawCardHTML(w);
   } else {
@@ -1251,7 +1252,7 @@ function syncHeader() {
       '<button class="btn gold" id="headDeposit" data-nav="wallet">Deposit</button>';
     $('#headDeposit').addEventListener('click', () => {
       state.walletSection = 'deposit';
-      state.walletTab = 'instant';
+      state.walletTab = 'manual';
     });
   } else {
     ha.innerHTML = '<button class="btn ghost" id="loginBtn">Login</button>' +
