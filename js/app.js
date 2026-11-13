@@ -974,14 +974,14 @@ function momoPanelHTML() {
   // Gateway deposits use Prince's preset amounts: the chips are the ONLY
   // way to set the amount. The amount box is read-only (Prince, 2026-11-06:
   // a client complained users could tap the box and type GHS 1 even though
-  // the minimum is 300 — what the user selects is what goes through).
-  const presets = [300, 500, 1000, 1500, 2000];
+  // the minimum is 200 — what the user selects is what goes through).
+  const presets = [200, 300, 400, 500, 600, 1000];
   return '<div class="card"><h3>Mobile Money</h3>' +
     '<form id="momoForm" class="stack">' +
     '<div class="amtrow">' + presets.map(a =>
-      '<button type="button" class="amtchip' + (a === 300 ? ' on' : '') + '" data-amt="' + a + '">GHS ' + a.toLocaleString('en-GB') + '</button>').join('') + '</div>' +
-    '<label>Amount (GHS) <input type="text" id="mmAmt" value="300" readonly tabindex="-1"></label>' +
-    '<p class="muted">Minimum deposit is GHS 300. Tap an amount above to select it — the amount cannot be typed in.</p>' +
+      '<button type="button" class="amtchip' + (a === 200 ? ' on' : '') + '" data-amt="' + a + '">GHS ' + a.toLocaleString('en-GB') + '</button>').join('') + '</div>' +
+    '<label>Amount (GHS) <input type="text" id="mmAmt" value="200" readonly tabindex="-1"></label>' +
+    '<p class="muted">Minimum deposit is GHS 200. Tap an amount above to select it — the amount cannot be typed in.</p>' +
     '<label>MoMo number <input type="tel" id="mmPhone" value="' + esc(phone) + '" required></label>' +
     '<label>Network <select id="mmNet"><option value="MTN">MTN Mobile Money</option><option value="TELECEL">Telecel Cash</option><option value="AIRTELTIGO">AT Money</option></select></label>' +
     '<p class="muted" id="mmFeeLine"></p>' +
@@ -1011,10 +1011,10 @@ function walletHTML() {
       '<li>Use your account phone number as the reference.</li>' +
       '<li>Fill the confirmation below — your balance is credited once the payment is confirmed.</li></ol>' +
       '<form id="manualDepForm" class="stack">' +
-      '<div class="amtrow">' + [300, 500, 1000, 1500, 2000].map(a =>
-        '<button type="button" class="amtchip' + (a === 300 ? ' on' : '') + '" data-mdamt="' + a + '">GHS ' + a.toLocaleString('en-GB') + '</button>').join('') + '</div>' +
-      '<label>Amount sent (GHS) <input type="text" id="mdAmt" value="300" readonly tabindex="-1"></label>' +
-      '<p class="muted">Minimum deposit is GHS 300. Tap the amount you sent above — the amount cannot be typed in.</p>' +
+      '<div class="amtrow">' + [200, 300, 400, 500, 600, 1000].map(a =>
+        '<button type="button" class="amtchip' + (a === 200 ? ' on' : '') + '" data-mdamt="' + a + '">GHS ' + a.toLocaleString('en-GB') + '</button>').join('') + '</div>' +
+      '<label>Amount sent (GHS) <input type="text" id="mdAmt" value="200" readonly tabindex="-1"></label>' +
+      '<p class="muted">Minimum deposit is GHS 200. Tap the amount you sent above — the amount cannot be typed in.</p>' +
       '<label>Your MoMo number <input type="tel" id="mdPhone" placeholder="05X XXX XXXX" required></label>' +
       '<label>Transaction ID / reference <input type="text" id="mdRef" placeholder="e.g. 12345678901" required></label>' +
       '<label>Screenshot of the transaction (optional) <input type="file" id="mdProof" accept="image/*"></label>' +
@@ -1517,7 +1517,7 @@ document.addEventListener('submit', async e => {
   if (id === 'momoForm') {
     e.preventDefault();
     const amt = parseFloat($('#mmAmt').value) || 0;
-    if (!(amt >= 300)) { toast('Minimum deposit is GHS 300 — tap an amount to select it.'); return; }
+    if (!(amt >= 200)) { toast('Minimum deposit is GHS 200 — tap an amount to select it.'); return; }
     const phone = $('#mmPhone').value.trim();
     try {
       const d = await api('/wallet/deposit-momo', {
@@ -1556,7 +1556,7 @@ document.addEventListener('submit', async e => {
     } catch (err) { toast(err.detail || 'That code was not accepted — check it and try again.'); }
   } else if (id === 'manualDepForm') {
     e.preventDefault();
-    if (!((parseFloat($('#mdAmt').value) || 0) >= 300)) { toast('Minimum deposit is GHS 300 — tap an amount to select it.'); return; }
+    if (!((parseFloat($('#mdAmt').value) || 0) >= 200)) { toast('Minimum deposit is GHS 200 — tap an amount to select it.'); return; }
     try {
       const body = { amount_ghs: parseFloat($('#mdAmt').value) || 0, sender_phone: $('#mdPhone').value.trim(), external_ref: $('#mdRef').value.trim() };
       const pf = $('#mdProof');

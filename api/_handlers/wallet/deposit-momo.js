@@ -19,7 +19,7 @@ module.exports = guard(async (req, res) => {
 
   const { amount_ghs, phone, network } = await readBody(req);
   const amount = Number(amount_ghs);
-  if (!(amount >= 300) || amount > 5000) return send(res, 400, { error: 'invalid_amount', detail: 'Enter an amount between GHS 300 and GHS 5,000.' });
+  if (!(amount >= 200) || amount > 5000) return send(res, 400, { error: 'invalid_amount', detail: 'Enter an amount between GHS 200 and GHS 5,000.' });
   const amountMinor = Math.round(amount * 100);
   if (Math.abs(amount * 100 - amountMinor) > 0.001) return send(res, 400, { error: 'invalid_amount', detail: 'Amount must be in whole pesewas.' });
 
