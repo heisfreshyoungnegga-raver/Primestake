@@ -345,7 +345,7 @@ function codesHTML() {
     '<button class="btn gold big" data-bc-gen>Generate Booking Code</button>' +
     (state.lastCode ? '<div class="manualbox"><div class="mannum" style="font-size:26px; letter-spacing:3px">' + esc(state.lastCode) + '</div><button class="btn gold" data-copy="' + esc(state.lastCode) + '">Copy Code</button></div>' : '') +
     '</div></div>' +
-    '<div class="card"><h3>Your booking codes</h3>' + (codeRows || '<p class="empty">No codes yet.</p>') + '</div>';
+    '<div class="card"><h3>All booking codes</h3>' + (codeRows || '<p class="empty">No codes yet.</p>') + '</div>';
 }
 function guideHTML() {
   if (!superTools()) return tabsHTML() + '<div class="card"><p class="muted">The Setup Guide lives in the <a href="super-admin.html">Super Admin Portal</a>.</p></div>';

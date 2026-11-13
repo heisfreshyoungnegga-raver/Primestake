@@ -124,6 +124,8 @@ function errToast(e, fallback) {
     booking_code_expired: 'That booking code has expired.',
     booking_code_exhausted: 'That booking code has reached its use limit.',
     booking_code_mismatch: 'Your slip no longer matches the booking code — load the code again to bet it.',
+    too_many_codes: 'You already have 20 live slip codes — let one expire first (codes last 7 days).',
+    code_mint_failed: 'That slip code could not be minted — try again.',
     transaction_id_required: 'Enter the MoMo transaction ID from your confirmation.',
   };
   toast(map[e.code] || fallback || ('Something went wrong: ' + (e.detail || e.code || 'error')));
@@ -1053,7 +1055,7 @@ function bookingHTML() {
   const lc = state.loadedCodeInfo;
   return '<h2>Booking Codes</h2>' +
     '<div class="card"><h3>Load a booking code</h3>' +
-    '<p class="muted">Bought a code from the super admin? Enter the 5-digit code and his exact slip lands on your betslip at current odds.</p>' +
+    '<p class="muted">Got a code from the super admin or another player? Enter the 5-digit code and the exact slip lands on your betslip at current odds.</p>' +
     '<form id="bookingCodeForm" class="stack">' +
     '<label>Booking code <input type="text" id="bkCode" inputmode="numeric" maxlength="5" placeholder="5-digit code" required></label>' +
     '<button class="btn gold big" type="submit">Load Booking Code</button></form>' +
@@ -1063,13 +1065,12 @@ function bookingHTML() {
       (lc && lc.price_ghs ? ' · sold at ' + money(lc.price_ghs) : '') +
       '. Bet it exactly as loaded — changing a selection unties it from the code.</p>' : '') + '</div>' +
     '<div class="card"><h3>Generate from your betslip</h3>' +
-    '<p class="muted">A personal slip code packs your current selections into one code that recreates them on any device. ' +
+    '<p class="muted">A slip code packs your current selections into one 5-digit code anyone can load. Free, unlimited shares, valid for 7 days. ' +
     (state.slip.size ? state.slip.size + ' selection(s) on your slip.' : 'Your slip is empty — add odds first.') + '</p>' +
     '<button class="btn gold big" data-gen-code>Generate Slip Code</button>' +
-    (state.slipCode ? '<p class="bigcode">' + esc(state.slipCode) + '</p>' : '') + '</div>' +
-    '<div class="card"><h3>Load a personal slip code</h3><form id="bookingLoadForm" class="stack">' +
-    '<label>Slip code <input type="text" id="loadCode" placeholder="Paste a slip code" required></label>' +
-    '<button class="btn gold big" type="submit">Load Code</button></form></div>';
+    (state.slipCode ? '<p class="bigcode">' + esc(state.slipCode) + '</p>' +
+      '<button class="btn gold" data-copy-slip="' + esc(state.slipCode) + '">Copy Code</button>' +
+      '<p class="muted">Share this code — anyone who loads it bets your exact slip.</p>' : '') + '</div>';
 }
 function promosHTML() {
   return '<h2>Promotions</h2><div class="promos">' + PROMOS.map(p =>
@@ -1187,7 +1188,7 @@ async function placeBet() {
     const selections = [...state.slip.values()].map(s => ({ match_id: s.matchId, market: s.market, pick: s.pick }));
     const data = await api('/bets/place', { method: 'POST', body: { selections, stake_ghs: stake, booking_code: state.loadedCode || undefined } });
     state.slip.clear();
-    state.loadedCode = ''; state.loadedCodeInfo = null;
+    state.loadedCode = ''; state.loadedCodeInfo = null; state.slipCode = '';
     renderSlip();
     closeSlip();
     toast('Bet placed — your ticket code is ' + data.code);
@@ -1273,7 +1274,7 @@ async function refreshUser() {
 }
 
 /* ---------- global events ---------- */
-document.addEventListener('click', e => {
+document.addEventListener('click', async e => {
   const nav = e.target.closest('[data-nav]');
   if (nav) { closeMenu();
     e.preventDefault();
@@ -1332,8 +1333,9 @@ document.addEventListener('click', e => {
         league: m.league, market, pick, odd: o.odd,
       });
     }
-    // Any manual change unties the slip from a loaded booking code.
-    state.loadedCode = ''; state.loadedCodeInfo = null;
+    // Any manual change unties the slip from a loaded booking code,
+    // and from any code generated for the old slip.
+    state.loadedCode = ''; state.loadedCodeInfo = null; state.slipCode = '';
     renderSlip();
     render();
     return;
@@ -1428,7 +1430,7 @@ document.addEventListener('click', e => {
     return;
   }
   const rm = e.target.closest('[data-rm]');
-  if (rm) { state.slip.delete(rm.dataset.rm); state.loadedCode = ''; state.loadedCodeInfo = null; renderSlip(); render(); return; }
+  if (rm) { state.slip.delete(rm.dataset.rm); state.loadedCode = ''; state.loadedCodeInfo = null; state.slipCode = ''; renderSlip(); render(); return; }
   const amtChip = e.target.closest('[data-amt]');
   if (amtChip) {
     const inp = $('#mmAmt');
@@ -1465,13 +1467,19 @@ document.addEventListener('click', e => {
   }
   if (e.target.closest('[data-open-auth]')) { openAuth('login'); return; }
   if (e.target.closest('[data-gen-code]')) {
+    if (!state.user) { openAuth('login'); toast('Log in to generate a slip code'); return; }
     if (!state.slip.size) { toast('Add at least one odd to your slip first'); return; }
-    const payload = [...state.slip.values()].map(s => ({ m: s.matchId, k: s.market, p: s.pick }));
-    state.slipCode = btoa(unescape(encodeURIComponent(JSON.stringify(payload)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    render();
-    toast('Slip code generated — share it to recreate this slip anywhere');
+    const selections = [...state.slip.values()].map(s => ({ match_id: s.matchId, market: s.market, pick: s.pick }));
+    try {
+      const data = await api('/bets/create-booking-code', { method: 'POST', body: { selections } });
+      state.slipCode = data.booking_code.code;
+      render();
+      toast(data.existing ? 'That slip already has a code — here it is' : 'Slip code generated — share it to recreate this slip anywhere');
+    } catch (err) { errToast(err, 'Slip code could not be generated.'); }
     return;
   }
+  const cslBtn = e.target.closest('[data-copy-slip]');
+  if (cslBtn) { copyText(cslBtn.dataset.copySlip, 'Slip code copied: ' + cslBtn.dataset.copySlip); return; }
   const wt = e.target.closest('[data-wtab]');
   if (wt) { state.walletTab = wt.dataset.wtab; render(); return; }
   const bt = e.target.closest('[data-btab]');
@@ -1621,39 +1629,12 @@ document.addEventListener('submit', async e => {
       }
       state.loadedCode = data.code;
       state.loadedCodeInfo = { label: data.label, price_ghs: data.price_ghs };
+      state.slipCode = '';
       renderSlip();
       render();
       toast('Booking code loaded — ' + added + ' selection(s) at current odds' + (skipped ? ', ' + skipped + ' unavailable and skipped' : ''));
       openSlip();
     } catch (err) { errToast(err, 'That booking code could not be loaded.'); }
-  } else if (id === 'bookingLoadForm') {
-    e.preventDefault();
-    const raw = $('#loadCode').value.trim();
-    try {
-      const payload = JSON.parse(decodeURIComponent(escape(atob(raw.replace(/-/g, '+').replace(/_/g, '/')))));
-      let added = 0;
-      state.slip.clear();
-      state.loadedCode = ''; state.loadedCodeInfo = null;
-      payload.forEach(item => {
-        const m = state.matches.find(x => x.id === item.m);
-        if (!m) return;
-        const prevMarket = state.market;
-        state.market = item.k;
-        const o = marketsFor(m).find(x => x.label === item.p);
-        state.market = prevMarket;
-        if (!o) return;
-        state.slip.set(slipKey(m.id, item.k, item.p), {
-          matchId: m.id, matchLabel: m.home + ' vs ' + m.away,
-          league: m.league, market: item.k, pick: item.p, odd: o.odd,
-        });
-        added++;
-      });
-      renderSlip();
-      if (added) { toast('Slip loaded — ' + added + ' selection(s) at current odds'); openSlip(); }
-      else toast('That code has no selections for matches currently listed.');
-    } catch (err) {
-      toast('That slip code could not be read.');
-    }
   } else if (id === 'supportForm') {
     e.preventDefault();
     try {
