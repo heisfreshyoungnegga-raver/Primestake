@@ -33,6 +33,7 @@ const state = {
   slipCode: '',
   loadedCode: '', loadedCodeInfo: null,
   supportMsgs: [],
+  winners: [], winnersLoaded: false,
 };
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -1072,6 +1073,21 @@ function bookingHTML() {
       '<button class="btn gold" data-copy-slip="' + esc(state.slipCode) + '">Copy Code</button>' +
       '<p class="muted">Share this code — anyone who loads it bets your exact slip.</p>' : '') + '</div>';
 }
+function winnersTickerHTML() {
+  if (!state.winnersLoaded || !state.winners.length) return '';
+  const items = state.winners.map(w =>
+    '<span class="win-item">' + esc(w.masked) + ' <b class="win-amt">₵' + Math.round(w.amount_ghs).toLocaleString('en-US') + ' Won</b> 🎉</span>').join('');
+  return '<div class="win-ticker"><span class="win-tag"><i></i>LIVE TICKER</span>' +
+    '<div class="win-view"><div class="win-track">' + items + items + '</div></div></div>';
+}
+async function loadWinnersTicker() {
+  try {
+    const data = await api('/bets/winners-ticker');
+    state.winners = Array.isArray(data.winners) ? data.winners : [];
+  } catch (e) { state.winners = []; }
+  state.winnersLoaded = true;
+  if (state.view === 'home') render();
+}
 function promosHTML() {
   return '<h2>Promotions</h2><div class="promos">' + PROMOS.map(p =>
     '<div class="card"><span class="gtag">' + p.tag + '</span><h3>' + p.title + '</h3><p>' + p.body + '</p></div>').join('') +
@@ -1135,7 +1151,7 @@ function viewHTML() {
     case 'virtual':
       return filtersHTML() + matchListHTML();
     default:
-      return heroHTML() + quickHTML() + promoStripHTML() + trustStripHTML() + filtersHTML() + matchListHTML();
+      return heroHTML() + winnersTickerHTML() + quickHTML() + promoStripHTML() + trustStripHTML() + filtersHTML() + matchListHTML();
   }
 }
 function render() {
@@ -1782,4 +1798,5 @@ $('#drawerShade').addEventListener('click', closeMenu);
   if (state.token) await refreshUser();
   if (state.user) loadBets();
   loadMatches();
+  loadWinnersTicker();
 })();

@@ -211,6 +211,55 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   to { transform: translateX(-50%); }
 }
 
+/* winners ticker (live wins, home page under the hero) */
+.win-ticker {
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  margin: 12px 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .08);
+}
+.win-tag {
+  background: #ffd7de;
+  color: #d61f3f;
+  font-weight: 800;
+  padding: 10px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+.win-tag i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e11d48;
+  display: inline-block;
+  animation: pulse-tag 1.6s ease-in-out infinite;
+}
+.win-view { flex: 1; overflow: hidden; display: flex; align-items: center; }
+.win-track {
+  display: flex;
+  gap: 28px;
+  white-space: nowrap;
+  padding-left: 18px;
+  animation: tick 40s linear infinite;
+}
+.win-item { font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; }
+.win-amt {
+  background: #fff3c4;
+  color: #8a6d00;
+  border: 1px solid #f0d878;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-weight: 800;
+}
+
 /* filters */
 .filters { margin: 10px 0; display: grid; gap: 8px; }
 .frow { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
@@ -590,7 +639,7 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ticker-track, .skel i { animation: none; }
+  .ticker-track, .win-track, .skel i { animation: none; }
   .drawer, .toast, .scrim { transition: none; }
 }
 
